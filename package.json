@@ -1,0 +1,9 @@
+{
+  "dependencies": {
+    "bcryptjs": "^3.0.2",
+    "face-api.js": "^0.22.2",
+    "react-router-dom": "^7.9.3",
+    "react-webcam": "^7.2.0",
+    "sonner": "^2.0.7"
+  }
+}

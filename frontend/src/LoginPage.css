@@ -1,0 +1,167 @@
+.login-bg {
+  min-height: 100vh;
+  width: 100vw;
+  background: linear-gradient(120deg, #846fff, #32e4de);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.login-card-theme {
+  background: rgba(255, 255, 255, 0.12);
+  box-shadow: 0 8px 44px rgba(60, 130, 220, 0.15);
+  border-radius: 34px;
+  padding: 42px 50px 32px 50px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 340px;
+  max-width: 400px;
+}
+
+.login-icon-theme {
+  margin-bottom: 26px;
+  filter: drop-shadow(0 2px 12px #444);
+}
+
+.login-title-theme {
+  font-size: 2.15rem;
+  font-weight: 800;
+  color: #fff;
+  margin-bottom: 20px;
+  letter-spacing: 1px;
+}
+
+/* Tabs styling */
+.login-tabs {
+  display: flex;
+  width: 100%;
+  margin-bottom: 22px;
+}
+
+.tab {
+  flex: 1;
+  padding: 12px 0;
+  text-align: center;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: #e0e6f8;
+  font-weight: 600;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: border-color 0.3s;
+}
+
+.tab.active {
+  border-bottom: 3px solid #fff;
+  font-weight: 700;
+}
+
+/* Form Styles */
+.login-form-theme {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  margin-top: 8px;
+  width: 100%;
+}
+
+.login-input-theme {
+  padding: 12px 14px;
+  font-size: 1.1rem;
+  border-radius: 9px;
+  border: 1.7px solid #e0ecfd;
+  margin-bottom: 2px;
+  width: 100%;
+  color: #333;
+}
+
+/* Remove pw-wrapper and eye-btn since no toggle selected */
+
+/* Buttons */
+.login-btn-theme {
+  font-size: 1.1rem;
+  font-weight: 700;
+  border-radius: 11px;
+  border: none;
+  cursor: pointer;
+  padding: 13px 0;
+  margin-top: 8px;
+  box-shadow: 0 2px 14px rgba(24, 155, 252, 0.10);
+  width: 100%;
+  transition: background 0.15s, transform 0.13s;
+  color: #fff;
+}
+
+.voter-btn-theme {
+  background: linear-gradient(90deg, #279afd, #7d5fff);
+}
+
+.voter-btn-theme:hover {
+  background: linear-gradient(90deg, #5cb1fb, #b793fd);
+}
+
+/* Error and Success messages */
+.login-error-theme {
+  color: #dc3d6a;
+  background: rgba(255, 34, 67, 0.08);
+  padding: 7px 0;
+  border-radius: 7px;
+  font-weight: 600;
+  margin-bottom: -8px;
+  font-size: 0.95rem;
+}
+
+.login-success-theme {
+  color: #3cda74;
+  background: rgba(60, 218, 116, 0.1);
+  padding: 7px 0;
+  border-radius: 7px;
+  font-weight: 600;
+  margin-bottom: -8px;
+  font-size: 0.95rem;
+}
+
+/* Responsive */
+@media (max-width: 700px) {
+  .login-card-theme {
+    min-width: 96vw;
+    max-width: 98vw;
+    padding: 24px 7vw;
+  }
+  .login-title-theme {
+    font-size: 1.4rem;
+  }
+  .tab {
+    font-size: 0.9rem;
+  }
+}
+
+.camera-btn {
+  margin-top: 12px;
+  background: linear-gradient(90deg, #279afd, #7d5fff);
+  border: none;
+  border-radius: 8px;
+  padding: 11px 0;
+  width: 100%;
+  font-weight: 700;
+  color: white;
+  cursor: pointer;
+  box-shadow: 0 2px 14px rgba(24, 155, 252, 0.25);
+  transition: background 0.2s ease-in-out;
+}
+
+.camera-btn:hover {
+  background: linear-gradient(90deg, #5cb1fb, #b793fd);
+}
+
+/* Optional video element styling */
+video {
+  border-radius: 12px;
+  margin-top: 12px;
+  width: 100%;
+  max-height: 300px;
+  object-fit: cover;
+  box-shadow: 0 0 15px rgba(40, 100, 255, 0.3);
+}

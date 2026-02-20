@@ -1,0 +1,262 @@
+/* General card styling */
+.candidate-list-card {
+  max-width: 900px;
+  margin: 20px auto;
+  background: #f9fafb;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.1);
+  padding: 20px;
+  font-family: Arial, sans-serif;
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.icon-circle {
+  background: linear-gradient(135deg, #694bec, #19dded);
+  border-radius: 11px;
+  padding: 9px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+}
+
+.icon, .icon-small {
+  stroke: white;
+}
+
+.icon-small {
+  width: 16px;
+  height: 16px;
+}
+
+.icon-large {
+  width: 40px;
+  height: 40px;
+}
+
+.card-title {
+  font-size: 24px;
+  font-weight: 700;
+  background: linear-gradient(90deg, #684bec, #19dded);
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  margin: 0;
+}
+
+
+
+.text-muted {
+  color: #7b91b9;
+  font-size: 16px;
+}
+
+.btn {
+  background: #2563eb;
+  color: white;
+  border: none;
+  padding: 9px 22px;
+  border-radius: 14px;
+  cursor: pointer;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: background-color 0.3s ease;
+}
+
+.btn:hover {
+  background: #1f40f1;
+}
+
+.add-btn {
+  background: linear-gradient(90deg, #22dea6, #11bcff);
+}
+
+.add-btn:hover {
+  background: linear-gradient(90deg, #11bcff, #22dea6);
+}
+
+.candidate-card {
+  background: #fff;
+  border-radius: 20px;
+  box-shadow: 0 6px 32px rgb(66 114 234 / 15%);
+  padding: 27px 30px 22px 30px;
+  margin: 36px 48px 0 48px;
+}
+
+.candidate-card .candidate-list-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.candidate-card .header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.candidate-card .header-left svg {
+  stroke: white;
+  background: linear-gradient(135deg, #694bec, #19dded);
+  border-radius: 11px;
+  padding: 9px 10px;
+}
+
+.candidate-card .card-title {
+  background: none;
+  -webkit-text-fill-color: initial;
+  background-clip: initial;
+  color: #684bec;
+  font-size: 22px;
+}
+
+.candidate-card .card-subtitle {
+  font-size: 14px;
+  color: #7b91b9;
+  margin-top: -6px;
+}
+
+.candidate-card .add-btn {
+  padding: 11px 30px;
+  font-weight: 700;
+  border-radius: 16px;
+  box-shadow: 0 4px 16px rgb(42 109 231 / 55%);
+}
+
+.candidate-card .add-btn:hover {
+  box-shadow: 0 5px 18px rgb(53 111 240 / 75%);
+}
+
+.candidate-card .card-content table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0 8px;
+  font-family: inherit;
+  margin-top: 20px;
+  background: #f9fafe;
+  border-radius: 14px;
+  box-shadow: 0 4px 20px rgb(78 111 198 / 8%);
+}
+
+.candidate-card .card-content th {
+  font-weight: 600;
+  color: #7b91b9;
+  padding: 14px 18px;
+  text-align: left;
+}
+
+.candidate-card .card-content th:first-child {
+  border-top-left-radius: 8px;
+  border-bottom-left-radius: 8px;
+  padding-left: 26px;
+}
+
+.candidate-card .card-content th:last-child {
+  border-top-right-radius: 8px;
+  border-bottom-right-radius: 8px;
+  padding-right: 26px;
+}
+
+.candidate-card .card-content td {
+  background: white;
+  padding: 18px 26px;
+  font-weight: 500;
+  font-size: 16px;
+  color: #302972;
+  vertical-align: middle;
+}
+
+.candidate-card .card-content td:first-child {
+  border-radius: 8px 0 0 8px;
+}
+
+.candidate-card .card-content td:last-child {
+  border-radius: 0 8px 8px 0;
+  text-align: right;
+}
+
+.candidate-card .card-content tr:hover td {
+  background: #f0f6ff;
+}
+
+.candidate-card .card-content .name-cell {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.candidate-card .card-content .name-cell img {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: 2.67px solid #d5ddeb;
+  object-fit: cover;
+}
+
+.badge {
+  display: inline-block;
+  padding: 6px 18px;
+  font-size: 14px;
+  border-radius: 9999px;
+  font-weight: 700;
+  user-select: none;
+}
+
+.badge.primary {
+  background: linear-gradient(90deg, #ecfaff 0, #effbfb 100%);
+  color: #0aa4a4;
+}
+
+.badge secondary {
+  background: linear-gradient(90deg, #fefeff 0, #fffcff 100%);
+  color: #302972;
+}
+
+.badge .outline {
+  border: 1px solid;
+  border-color: #9985ff;
+  color: #8a61ff;
+  background: transparent;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.actions button {
+  background: transparent;
+  border: none;
+  color: #6d68ad;
+  cursor: pointer;
+  height: 38px;
+  width: 38px;
+  border-radius: 10px;
+  transition: background-color 0.2s ease;
+}
+
+.actions button:hover {
+  background-color: #1b149d1a;
+  color: #332db3;
+}
+
+img {
+  vertical-align: middle;
+}
