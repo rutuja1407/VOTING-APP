@@ -6,7 +6,6 @@ const voterSchema = new mongoose.Schema(
       type: String,
       required: true,
       unique: true,
-      match: [/^ABC.*/, 'Voter ID must start with ABC'],
     },
 
     fullName: {

@@ -305,11 +305,11 @@ function VoterLogin() {
       return null;
     }
 
-    // Require blink before capture
-    if (!blinkDetectedRef.current) {
-      toast.error("Please blink once before capturing");
-      return null;
-    }
+    // // Require blink before capture
+    // if (!blinkDetectedRef.current) {
+    //   toast.error("Please blink once before capturing");
+    //   return null;
+    // }
 
     const detection = await faceapi
       .detectSingleFace(
@@ -416,6 +416,7 @@ function VoterLogin() {
     const loginDescriptor = await captureLoginFace();
     if (!loginDescriptor) {
       setLoginError("Face capture failed");
+      toast.error("Face capture failed. Please try again.");
       return;
     }
     try {

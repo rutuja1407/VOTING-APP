@@ -10,7 +10,6 @@ const userSchema = new mongoose.Schema({
     uppercase: true,
     trim: true,
     index: true,
-    match: [/^ABC.*/, 'Voter ID must start with ABC'],
   },
 
   name: {
@@ -27,7 +26,7 @@ const userSchema = new mongoose.Schema({
     unique: true,
     index: true,
     validate: {
-      validator: function(v) {
+      validator: function (v) {
         return /^[6-9]\d{9}$/.test(v);
       },
       message: 'Invalid Indian mobile number'
@@ -71,7 +70,7 @@ const userSchema = new mongoose.Schema({
     type: [Number],
     required: true,
     validate: {
-      validator: function(v) {
+      validator: function (v) {
         return Array.isArray(v) && v.length === 128;
       },
       message: 'Face descriptor must contain 128 values'
@@ -82,7 +81,7 @@ const userSchema = new mongoose.Schema({
     type: Date,
     default: Date.now
   },
-   isFaceRegistered: Boolean 
+  isFaceRegistered: Boolean
 
 }, {
   timestamps: true,
@@ -93,7 +92,7 @@ const userSchema = new mongoose.Schema({
 /* -------------------------------
    Password Hashing Middleware
 --------------------------------*/
-userSchema.pre('save', async function(next) {
+userSchema.pre('save', async function (next) {
 
   if (!this.isModified('password')) return next();
 
@@ -110,7 +109,7 @@ userSchema.pre('save', async function(next) {
 /* -------------------------------
    Compare Password Method
 --------------------------------*/
-userSchema.methods.comparePassword = async function(password) {
+userSchema.methods.comparePassword = async function (password) {
   return await bcrypt.compare(password, this.password);
 };
 

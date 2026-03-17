@@ -16,6 +16,9 @@ function VoterDashboard() {
   // Add state for terms acceptance checkbox
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [candidates, setCandidates] = useState([]);
+  const [modelsLoaded, setModelsLoaded] = useState(false);
+  const [modelsLoading, setModelsLoading] = useState(true);
+
   const { user, setUser } = useUser();
   const videoRef = useRef(null);
   const streamRef = useRef(null);
@@ -23,46 +26,61 @@ function VoterDashboard() {
 
   const [referenceDescriptor, setReferenceDescriptor] = useState(null);
 
+  const detectorOptions = new faceapi.TinyFaceDetectorOptions({
+    inputSize: 320, // or 224 or 256
+    scoreThreshold: 0.4, // more sensitive than 0.5
+  });
+
   const captureReferenceFace = async () => {
-    if (!videoRef.current) return;
+    if (!videoRef.current || !modelsLoaded) return;
 
-    try {
-      const detection = await faceapi
-        .detectSingleFace(
-          videoRef.current,
-          new faceapi.TinyFaceDetectorOptions()
-        )
-        .withFaceLandmarks()
-        .withFaceDescriptor();
+    const maxAttempts = 5;
+    let attempts = 0;
 
-      if (!detection) {
-        toast.error("Face not detected. Please stay in front of camera.");
-        return;
+    while (attempts < maxAttempts) {
+      attempts += 1;
+      console.log(
+        `Attempting to capture reference face (Attempt ${attempts}/${maxAttempts})`
+      );
+      try {
+        const detection = await faceapi
+          .detectSingleFace(videoRef.current, detectorOptions)
+          .withFaceLandmarks()
+          .withFaceDescriptor();
+
+        console.log("Detection result:", detection);
+
+        if (detection) {
+          toast.success("Reference face captured. Starting monitoring...");
+          setReferenceDescriptor(detection.descriptor);
+          startContinuousMonitoring();
+          return;
+        }
+      } catch (err) {
+        console.error("Reference face error:", err);
       }
-      else {
-        toast.success("Reference face captured. Starting monitoring...");
-      }
 
-      setReferenceDescriptor(detection.descriptor);
-
-      startContinuousMonitoring();
-    } catch (err) {
-      console.error("Reference face error:", err);
+      await new Promise((resolve) => setTimeout(resolve, 800));
     }
+
+    toast.error(
+      "Face not detected. Please sit closer to the camera with good lighting."
+    );
   };
 
   const startContinuousMonitoring = () => {
     if (monitorRef.current) return;
+    if (!modelsLoaded) {
+      toast.error("Models not loaded yet");
+      return;
+    }
 
     monitorRef.current = setInterval(async () => {
       if (!videoRef.current || !referenceDescriptor) return;
 
       try {
         const detections = await faceapi
-          .detectAllFaces(
-            videoRef.current,
-            new faceapi.TinyFaceDetectorOptions()
-          )
+          .detectAllFaces(videoRef.current, detectorOptions)
           .withFaceLandmarks()
           .withFaceDescriptors();
 
@@ -197,22 +215,53 @@ function VoterDashboard() {
   }, []);
 
   useEffect(() => {
+    const loadModels = async () => {
+      try {
+        const MODEL_URL = "/models";
+        toast.loading("Loading face detection models...", {
+          id: "dashboard-models-loading",
+        });
+
+        await Promise.all([
+          faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
+          faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
+          faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
+        ]);
+
+        setModelsLoaded(true);
+        toast.success("Face detection ready!", {
+          id: "dashboard-models-loading",
+        });
+      } catch (err) {
+        console.error("Dashboard model loading error:", err);
+        toast.error("Failed to load face detection models", {
+          id: "dashboard-models-loading",
+        });
+      } finally {
+        setModelsLoading(false);
+      }
+    };
+
+    loadModels();
+  }, []);
+
+  useEffect(() => {
     const startCamera = async () => {
+      if (!modelsLoaded) return;
+
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
           video: true,
         });
-
         streamRef.current = stream;
-
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
         }
 
-        // capture reference face after camera starts
+        // try capturing reference after short delay
         setTimeout(() => {
           captureReferenceFace();
-        }, 2000);
+        }, 1500);
       } catch (err) {
         console.error("Camera error:", err);
         toast.error("Camera access required for voting security");
@@ -224,8 +273,9 @@ function VoterDashboard() {
     return () => {
       streamRef.current?.getTracks().forEach((track) => track.stop());
       clearInterval(monitorRef.current);
+      monitorRef.current = null;
     };
-  }, []);
+  }, [modelsLoaded]);
 
   return (
     <div className="voter-dashboard">
@@ -234,7 +284,14 @@ function VoterDashboard() {
         autoPlay
         muted
         playsInline
-        style={{ display: "none" }}
+        style={{
+          opacity: 0,
+          position: "absolute",
+          top: 0,
+          left: 0,
+          width: "1px",
+          height: "1px",
+        }}
       />
       <header className="dashboard-header">
         <div className="header-container">
