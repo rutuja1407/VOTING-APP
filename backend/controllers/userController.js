@@ -12,9 +12,9 @@ function euclideanDistance(desc1, desc2) {
 
 const registerUser = async (userData) => {
   try {
-    const { voterId, name, phone, email, password, faceDescriptor } = userData;
+    const { voterId, name, phone, password, faceDescriptor } = userData;
 
-    if (!voterId || !name || !phone || !email || !password || !faceDescriptor) {
+    if (!voterId || !name || !phone ||!password || !faceDescriptor) {
       return {
         success: false,
         message: 'All fields are required'
@@ -25,8 +25,7 @@ const registerUser = async (userData) => {
     const existingUser = await User.findOne({
       $or: [
         { voterId },
-        { phone },
-        { email }
+        { phone }
       ]
     });
 
@@ -34,7 +33,6 @@ const registerUser = async (userData) => {
       let field = '';
       if (existingUser.voterId === voterId) field = 'Voter ID';
       else if (existingUser.phone === phone) field = 'Phone number';
-      else if (existingUser.email === email) field = 'Email';
 
       return {
         success: false,
@@ -60,7 +58,6 @@ const registerUser = async (userData) => {
       voterId,
       name,
       phone,
-      email,
       password,
       faceDescriptor
     });
@@ -74,7 +71,7 @@ const registerUser = async (userData) => {
         voterId: savedUser.voterId,
         name: savedUser.name,
         phone: savedUser.phone,
-        email: savedUser.email
+  
       }
     };
 
@@ -125,7 +122,6 @@ const loginUser = async (loginData) => {
         voterId: user.voterId,
         name: user.name,
         phone: user.phone,
-        email: user.email,
         hasVoted: user.hasVoted
       }
     };

@@ -24,7 +24,6 @@ function VoterLogin() {
     voterId: "",
     name: "",
     phone: "",
-    email: "",
     password: "",
     confirmPassword: "",
   });
@@ -316,41 +315,37 @@ function VoterLogin() {
     return descriptor;
   };
 
-  const handleVoterIdUpload = async (file) => {
+  const handleVoterCardUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
 
-    if (!file) {
-      toast.error("Please upload a voter ID image");
+    const img = await faceapi.bufferToImage(file);
+
+    const detections = await faceapi
+      .detectSingleFace(img)
+      .withFaceLandmarks()
+      .withFaceDescriptor();
+
+    if (!detections) {
+      alert("No face detected in Voter ID");
       return;
     }
 
-    try {
+    const descriptor = Array.from(detections.descriptor); // convert Float32Array
 
-      const img = new Image();
-      img.src = URL.createObjectURL(file);
+    // Send to backend
+    await fetch("http://localhost:8000/api/auth/save-voter-face", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        voterId: registerData.voterId,
+        faceDescriptor: descriptor,
+      }),
+    });
 
-      img.onload = async () => {
-
-        const detections = await faceapi
-          .detectAllFaces(img, new faceapi.TinyFaceDetectorOptions())
-          .withFaceLandmarks()
-          .withFaceDescriptors();
-
-        if (detections.length !== 1) {
-          toast.error("Voter ID must contain exactly one face");
-          return;
-        }
-
-        const descriptor = Array.from(detections[0].descriptor);
-
-        setVoterIdDescriptor(descriptor);
-
-        toast.success("Voter ID face captured successfully");
-      };
-
-    } catch (error) {
-      console.error("Voter ID detection error:", error);
-      toast.error("Failed to process voter ID image");
-    }
+    alert("Face saved successfully!");
   };
   // Input handlers
     const handleLoginChange = (e) => {
@@ -556,7 +551,7 @@ function VoterLogin() {
             <input
               type="text"
               name="userId"
-              placeholder="Voter ID or Email"
+              placeholder="Voter ID"
               value={loginData.userId}
               onChange={handleLoginChange}
               className="login-input-theme"
@@ -688,7 +683,7 @@ function VoterLogin() {
                 onChange={(e) => {
                   const file = e.target.files[0];
                   detectVoterId(file);
-                  handleVoterIdUpload(file);
+                  handleVoterCardUpload(e)
                 }}
               />
             </label>
@@ -710,15 +705,7 @@ function VoterLogin() {
               className="login-input-theme"
               required
             />
-            <input
-              type="email"
-              name="email"
-              placeholder="Email Address"
-              value={registerData.email}
-              onChange={handleRegisterChange}
-              className="login-input-theme"
-              required
-            />
+            
             
             {/* Password field with eye icon */}
             <div style={{ position: 'relative', width: '100%' }}>

@@ -415,7 +415,7 @@ const stopUnifiedSecurityMonitor = () => {
       {/* Login Form */}
       {activeTab === "login" && (
         <form onSubmit={handleSubmitLogin}>
-          <label>User ID (voter ID or Email)</label>
+          <label>User ID (voter ID)</label>
           <input
             type="text"
             name="userId"

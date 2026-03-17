@@ -1,7 +1,7 @@
 const express = require('express');
 const bcrypt = require('bcrypt');
 const User = require('../models/user');
-
+const Voter = require ('../models/voter')
 const router = express.Router();
 
 /* ------------------------------
@@ -94,7 +94,32 @@ router.post('/register', async (req, res) => {
 
 });
 
+router.post("/save-voter-face", async (req, res) => {
+  try {
+    const { voterId, faceDescriptor } = req.body;
 
+    if (!voterId || !faceDescriptor) {
+      return res.status(400).json({ message: "Missing data" });
+    }
+
+    const voter = await Voter.default.findOneAndUpdate(
+      { voterId },
+      {
+        faceDescriptor
+      },
+      { new: true }
+    );
+
+    if (!voter) {
+      return res.status(404).json({ message: "Voter not found" });
+    }
+
+    res.json({ message: "Face descriptor saved" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
 /* --------------------------------
    LOGIN USER
 ---------------------------------*/

@@ -39,15 +39,6 @@ const userSchema = new mongoose.Schema({
     }
   },
 
-  email: {
-    type: String,
-    required: true,
-    unique: true,
-    lowercase: true,
-    trim: true,
-    index: true
-  },
-
   password: {
     type: String,
     required: true,
@@ -95,7 +86,8 @@ const userSchema = new mongoose.Schema({
   faceRegisteredAt: {
     type: Date,
     default: Date.now
-  }
+  },
+   isFaceRegistered: Boolean 
 
 }, {
   timestamps: true,
