@@ -6,7 +6,6 @@ import { toast } from "sonner";
 import { useUser } from "./contexts/user.context";
 import { FiEye, FiEyeOff } from "react-icons/fi";
 import Tesseract from "tesseract.js";
-import axios from "axios";
 function VoterLogin() {
   const [activeTab, setActiveTab] = useState("login");
   const navigate = useNavigate();

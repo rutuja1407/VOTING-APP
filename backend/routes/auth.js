@@ -187,7 +187,7 @@ router.post('/login', async (req, res) => {
     }
 
     /* Face verification */
-    const distance = euclidean(user.faceDescriptor, loginDescriptor);
+    const distance = euclideanDistance(user.faceDescriptor, loginDescriptor);
 
     const threshold = 0.6;
 

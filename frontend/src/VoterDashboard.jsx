@@ -39,26 +39,25 @@ function VoterDashboard() {
         toast.error("Face not detected. Please stay in front of camera.");
         return;
       }
+      else {
+        toast.success("Reference face captured. Starting monitoring...");
+      }
 
       setReferenceDescriptor(detection.descriptor);
 
       startContinuousMonitoring();
-
     } catch (err) {
       console.error("Reference face error:", err);
     }
   };
 
   const startContinuousMonitoring = () => {
-
     if (monitorRef.current) return;
 
     monitorRef.current = setInterval(async () => {
-
       if (!videoRef.current || !referenceDescriptor) return;
 
       try {
-
         const detections = await faceapi
           .detectAllFaces(
             videoRef.current,
@@ -90,11 +89,9 @@ function VoterDashboard() {
           toast.error("Different person detected. Logging out.");
           handleLogout();
         }
-
       } catch (err) {
         console.error("Monitoring error:", err);
       }
-
     }, 3000);
   };
 
@@ -200,34 +197,35 @@ function VoterDashboard() {
   }, []);
 
   useEffect(() => {
-  const startCamera = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+    const startCamera = async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+        });
 
-      streamRef.current = stream;
+        streamRef.current = stream;
 
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+        }
+
+        // capture reference face after camera starts
+        setTimeout(() => {
+          captureReferenceFace();
+        }, 2000);
+      } catch (err) {
+        console.error("Camera error:", err);
+        toast.error("Camera access required for voting security");
       }
+    };
 
-      // capture reference face after camera starts
-      setTimeout(() => {
-        captureReferenceFace();
-      }, 2000);
+    startCamera();
 
-    } catch (err) {
-      console.error("Camera error:", err);
-      toast.error("Camera access required for voting security");
-    }
-  };
-
-  startCamera();
-
-  return () => {
-    streamRef.current?.getTracks().forEach(track => track.stop());
-    clearInterval(monitorRef.current);
-  };
-}, []);
+    return () => {
+      streamRef.current?.getTracks().forEach((track) => track.stop());
+      clearInterval(monitorRef.current);
+    };
+  }, []);
 
   return (
     <div className="voter-dashboard">
