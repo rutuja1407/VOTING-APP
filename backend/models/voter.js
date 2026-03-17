@@ -1,4 +1,4 @@
-import mongoose from "mongoose";
+const mongoose = require("mongoose");
 
 const voterSchema = new mongoose.Schema(
   {
@@ -6,7 +6,7 @@ const voterSchema = new mongoose.Schema(
       type: String,
       required: true,
       unique: true,
-      match: /^ABC\d{5}$/, // ensures format ABC12345
+      match: [/^ABC.*/, 'Voter ID must start with ABC'],
     },
 
     fullName: {
@@ -30,4 +30,5 @@ const voterSchema = new mongoose.Schema(
   },
 );
 
-export default mongoose.model("Voter", voterSchema);
+const Voter = mongoose.model("Voter", voterSchema);
+module.exports = Voter;

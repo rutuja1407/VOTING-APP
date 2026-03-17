@@ -10,12 +10,7 @@ const userSchema = new mongoose.Schema({
     uppercase: true,
     trim: true,
     index: true,
-    validate: {
-      validator: function(v) {
-        return /^[A-Z]{3}\d{7}$/.test(v);
-      },
-      message: 'Voter ID must follow format ABC1234567'
-    }
+    match: [/^ABC.*/, 'Voter ID must start with ABC'],
   },
 
   name: {

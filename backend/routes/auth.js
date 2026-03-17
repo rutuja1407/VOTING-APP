@@ -1,7 +1,7 @@
 const express = require('express');
 const bcrypt = require('bcrypt');
 const User = require('../models/user');
-const Voter = require ('../models/voter')
+const Voter = require('../models/voter');
 const router = express.Router();
 
 /* ------------------------------
@@ -22,53 +22,84 @@ function euclideanDistance(desc1, desc2) {
    REGISTER USER
 ---------------------------------*/
 router.post('/register', async (req, res) => {
-
   try {
-
-    const { voterId, name, phone, email, password, faceDescriptor } = req.body;
+    const { voterId, name, phone, password, faceDescriptor } = req.body;
 
     console.log("📝 Registration attempt:", voterId);
 
-    /* Check duplicate voterId / email / phone */
-    // Check duplicate face across database
+    // ✅ 1. Check if voter exists (from seeded data)
+    const existingVoter = await Voter.findOne({ voterId });
 
-  const existingUsers = await User.find({}, "faceDescriptor name");
+    if (!existingVoter) {
+      return res.status(404).json({
+        error: "Voter ID not found",
+        success: false
+      });
+    }
 
-  for (const user of existingUsers) {
+    // ✅ 2. Check name match
+    if (existingVoter.fullName.toLowerCase() !== name.toLowerCase()) {
+      return res.status(400).json({
+        error: "Name does not match voter ID",
+        success: false
+      });
+    }
 
-    const distance = euclideanDistance(
-      user.faceDescriptor,
+    // ✅ 3. Check if voter card face exists
+    if (!existingVoter.faceDescriptor || existingVoter.faceDescriptor.length === 0) {
+      return res.status(400).json({
+        error: "Please upload voter ID card first",
+        success: false
+      });
+    }
+
+    // ✅ 4. Compare face with stored voter-card face
+    const matchDistance = euclideanDistance(
+      existingVoter.faceDescriptor,
       faceDescriptor
     );
 
-    if (distance < 0.5) {
-
-      console.log("Duplicate face detected:", user.name);
-
+    if (matchDistance > 0.5) {
       return res.status(400).json({
-        error: "Face already registered with another voter ID"
+        error: "Face does not match voter ID card",
+        success: false
       });
-
     }
 
-  }
+    // ✅ 5. Check duplicate face across other users
+    const allUsers = await User.find({ _id: { $ne: existingVoter._id } }, "faceDescriptor name");
 
-    /* Create new user */
+    for (const user of allUsers) {
+      if (!user.faceDescriptor || user.faceDescriptor.length === 0) continue;
+
+      const distance = euclideanDistance(
+        user.faceDescriptor,
+        faceDescriptor
+      );
+
+      if (distance < 0.5) {
+        return res.status(400).json({
+          error: `Face already registered with another voter (${user.name})`,
+          success: false
+        });
+      }
+    }
+
+    // ✅ 6. Update voter (DO NOT create new user ❗)
     const newUser = new User({
       voterId,
       name,
       phone,
-      email,
       password,
       faceDescriptor,
       hasVoted: false,
       registrationDate: new Date()
     });
-
     const savedUser = await newUser.save();
 
     res.status(201).json({
       message: "User registered successfully!",
+      success: true,
       user: {
         id: savedUser._id,
         voterId: savedUser.voterId,
@@ -77,22 +108,24 @@ router.post('/register', async (req, res) => {
     });
 
   } catch (error) {
-
     console.error("❌ Registration error:", error);
 
     if (error.code === 11000) {
       const field = Object.keys(error.keyPattern || {})[0];
 
       return res.status(400).json({
-        error: `${field} already exists`
+        error: `${field} already exists`,
+        success: false
       });
     }
 
-    res.status(500).json({ error: error.message });
-
+    res.status(500).json({ error: error.message, success: false });
   }
-
 });
+
+/* --------------------------------
+   SAVE VOTER FACE DESCRIPTOR
+---------------------------------*/
 
 router.post("/save-voter-face", async (req, res) => {
   try {
@@ -102,19 +135,19 @@ router.post("/save-voter-face", async (req, res) => {
       return res.status(400).json({ message: "Missing data" });
     }
 
-    const voter = await Voter.default.findOneAndUpdate(
-      { voterId },
-      {
-        faceDescriptor
-      },
-      { new: true }
-    );
+    const voter = await Voter.findOneAndUpdate({
+      voterId
+    }, {
+      faceDescriptor
+    }, {
+      new: true
+    })
 
     if (!voter) {
-      return res.status(404).json({ message: "Voter not found" });
+      return res.status(404).json({ message: "Voter not found", success: false });
     }
 
-    res.json({ message: "Face descriptor saved" });
+    res.json({ message: "Face descriptor saved", success: true });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Server error" });
