@@ -7,12 +7,17 @@ function VoterAuthPage() {
 
   // Login form state
   const [loginData, setLoginData] = useState({ userId: "", password: "" });
+  const [verifiedFaceDescriptor, setVerifiedFaceDescriptor] = useState(null);
+  const [monitoringStarted, setMonitoringStarted] = useState(false);
+  const [votingDisabled, setVotingDisabled] = useState(false);
   const [loginError, setLoginError] = useState("");
   const [loginSuccess, setLoginSuccess] = useState("");
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [storedDescriptor, setStoredDescriptor] = useState(null);
 
   // Register form state
   const [registerData, setRegisterData] = useState({
-    aadhaar: "",
+    voterId: "",
     name: "",
     phone: "",
     email: "",
@@ -26,6 +31,9 @@ function VoterAuthPage() {
   const [cameraOn, setCameraOn] = useState(false);
   const [faceDescriptor, setFaceDescriptor] = useState(null);
   const webcamRef = useRef(null);
+  const securityRef = useRef(null);
+  const violationCountRef = useRef(0);
+  const lastBlinkTimeRef = useRef(Date.now());
 
   // Load face-api models once when component mounts
   useEffect(() => {
@@ -47,14 +55,6 @@ function VoterAuthPage() {
   const handleRegisterChange = (e) => {
     const { name, value } = e.target;
 
-    if (name === "aadhaar") {
-      const digitsOnly = value.replace(/\D/g, "");
-      setRegisterData((prev) => ({
-        ...prev,
-        [name]: digitsOnly.slice(0, 12),
-      }));
-      return;
-    }
     if (name === "phone") {
       const digitsOnly = value.replace(/\D/g, "");
       setRegisterData((prev) => ({
@@ -63,30 +63,172 @@ function VoterAuthPage() {
       }));
       return;
     }
+
     setRegisterData((prev) => ({
       ...prev,
       [name]: value,
     }));
   };
+  const sendAlertToBackend = async (type) => {
+    try {
+      await fetch("http://localhost:8000/api/alert", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type,
+          message: type,
+        }),
+      });
+    } catch (err) {
+      console.error("Failed to send alert:", err);
+    }
+  };
+  const forceLogout = () => {
+    alert("🚨 Security violation detected. Logging out.");
+
+    stopUnifiedSecurityMonitor();
+
+    setIsLoggedIn(false);
+    setCameraOn(false);
+    setStoredDescriptor(null);
+
+    violationCountRef.current = 0;
+    lastBlinkTimeRef.current = Date.now();
+
+    setLoginSuccess("");
+  };
+
+  const handleViolation = async (type) => {
+    if (violationCountRef.current < 2) {
+      violationCountRef.current += 1;
+      alert(`⚠️ Warning ${violationCountRef.current}/2: ${type}`);
+    } else {
+      await sendAlertToBackend(type);
+      forceLogout();
+    }
+  };
+  const euclideanDistance = (p1, p2) => {
+    return Math.sqrt(
+      Math.pow(p1.x - p2.x, 2) +
+      Math.pow(p1.y - p2.y, 2)
+    );
+  };
+
+  // Eye Aspect Ratio calculation
+  const getEAR = (eye) => {
+    const A = euclideanDistance(eye[1], eye[5]);
+    const B = euclideanDistance(eye[2], eye[4]);
+    const C = euclideanDistance(eye[0], eye[3]);
+    return (A + B) / (2.0 * C);
+  };
+ 
+  const startUnifiedSecurityMonitor = () => {
+  if (securityRef.current) return;
+
+  securityRef.current = setInterval(async () => {
+    if (!webcamRef.current || !webcamRef.current.video) return;
+    if (!storedDescriptor) return;
+
+    try {
+      const detections = await faceapi
+        .detectAllFaces(
+          webcamRef.current.video,
+          new faceapi.TinyFaceDetectorOptions()
+        )
+        .withFaceLandmarks()
+        .withFaceDescriptors();
+
+      // MULTI FACE CHECK
+      if (detections.length !== 1) {
+        handleViolation("MULTI_FACE_DETECTED");
+        return;
+      }
+
+      const detection = detections[0];
+      const landmarks = detection.landmarks.positions;
+      const liveDescriptor = detection.descriptor;
+
+      // LIVENESS CHECK
+      const leftEye = landmarks.slice(36, 42);
+      const rightEye = landmarks.slice(42, 48);
+
+      const leftEAR = getEAR(leftEye);
+      const rightEAR = getEAR(rightEye);
+      const EAR_THRESHOLD = 0.25;
+
+      if (leftEAR < EAR_THRESHOLD && rightEAR < EAR_THRESHOLD) {
+        lastBlinkTimeRef.current = Date.now();
+      }
+
+      const secondsSinceBlink =
+        (Date.now() - lastBlinkTimeRef.current) / 1000;
+
+      if (secondsSinceBlink > 10) {
+        handleViolation("LIVENESS_FAILED");
+        return;
+      }
+
+      // FACE VERIFICATION
+      const distance = faceapi.euclideanDistance(
+        liveDescriptor,
+        storedDescriptor
+      );
+
+      if (distance > 0.5) {
+        handleViolation("FACE_MISMATCH");
+        return;
+      }
+
+      // All checks passed
+      violationCountRef.current = 0;
+
+    } catch (err) {
+      console.error("Security monitor error:", err);
+    }
+  }, 3000);
+};
+
+const stopUnifiedSecurityMonitor = () => {
+  if (securityRef.current) {
+    clearInterval(securityRef.current);
+    securityRef.current = null;
+  }
+};
 
   const handleSubmitLogin = async (e) => {
     e.preventDefault();
     setLoginError("");
     setLoginSuccess("");
 
+
     try {
       const response = await fetch("http://localhost:8000/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(loginData),
+        body: JSON.stringify({
+          voterId: loginData.userId,
+          password: loginData.password,
+          loginDescriptor: storedDescriptor
+        }),
       });
 
       const data = await response.json();
 
       if (response.ok) {
+
+        if (!data.user.match) {
+          setLoginError("Face does not match");
+          return;
+        }
+
         setLoginSuccess("Login successful!");
-        console.log("User logged in:", data.user);
-      } else {
+        setIsLoggedIn(true);
+        setCameraOn(true);
+
+        lastBlinkTimeRef.current = Date.now();
+        violationCountRef.current = 0;
+      }
+      else {
         setLoginError(data.error || "Login failed");
       }
     } catch (error) {
@@ -95,21 +237,33 @@ function VoterAuthPage() {
     }
   };
 
+  useEffect(() => {
+    if (isLoggedIn && cameraOn && storedDescriptor) {
+      startUnifiedSecurityMonitor();
+    }
+
+    return () => {
+      stopUnifiedSecurityMonitor();
+    };
+  }, [isLoggedIn, cameraOn, storedDescriptor]);
+
   const handleSubmitRegister = async (e) => {
     e.preventDefault();
     setRegisterError("");
     setRegisterSuccess("");
 
-    const aadhaarRegex = /^\d{12}$/;
+   
     const phoneRegex = /^\d{10}$/;
     const password = registerData.password;
     const uppercaseRegex = /[A-Z]/;
     const symbolRegex = /[!@#$%^&*(),.?":{}|<>]/;
+    const voterIdRegex = /^[A-Z]{3}[0-9]{7}$/;
 
-    if (!aadhaarRegex.test(registerData.aadhaar)) {
-      setRegisterError("Aadhaar number must be exactly 12 digits.");
+    if (!voterIdRegex.test(registerData.voterId)) {
+      setRegisterError("Voter ID must follow format ABC1234567");
       return;
     }
+  
     if (!phoneRegex.test(registerData.phone)) {
       setRegisterError("Phone number must be exactly 10 digits.");
       return;
@@ -140,8 +294,12 @@ function VoterAuthPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          ...registerData,
-          faceDescriptor,
+          voterId: registerData.voterId,
+          name: registerData.name,
+          phone: registerData.phone,
+          email: registerData.email,
+          password: registerData.password,
+          faceDescriptor
         }),
       });
 
@@ -150,7 +308,7 @@ function VoterAuthPage() {
       if (response.ok) {
         setRegisterSuccess("✅ Registration successful! You may now log in.");
         setRegisterData({
-          aadhaar: "",
+          voterId: "",
           name: "",
           phone: "",
           email: "",
@@ -178,7 +336,9 @@ function VoterAuthPage() {
 
     try {
       const detection = await faceapi
-        .detectSingleFace(webcamRef.current.video, new faceapi.TinyFaceDetectorOptions())
+        .detectSingleFace(
+          webcamRef.current.video,
+          new faceapi.TinyFaceDetectorOptions())
         .withFaceLandmarks()
         .withFaceDescriptor();
 
@@ -196,6 +356,17 @@ function VoterAuthPage() {
   };
 
   return (
+    <div style={{ maxWidth: "500px", margin: "3rem auto" }}>
+      {cameraOn && (
+        <Webcam
+          audio={false}
+          ref={webcamRef}
+          screenshotFormat="image/jpeg"
+          width="100%"
+          videoConstraints={{ facingMode: "user" }}
+        />
+      )}
+
     <div
       style={{
         maxWidth: "500px",
@@ -244,7 +415,7 @@ function VoterAuthPage() {
       {/* Login Form */}
       {activeTab === "login" && (
         <form onSubmit={handleSubmitLogin}>
-          <label>User ID (Aadhaar or Email)</label>
+          <label>User ID (voter ID or Email)</label>
           <input
             type="text"
             name="userId"
@@ -276,20 +447,14 @@ function VoterAuthPage() {
       {/* Register Form */}
       {activeTab === "register" && (
         <form onSubmit={handleSubmitRegister}>
-          <label>Aadhaar Number</label>
+          <label>Voter ID</label>
           <input
             type="text"
-            name="aadhaar"
-            value={registerData.aadhaar}
+            name="voterId"
+            value={registerData.voterId}
             onChange={handleRegisterChange}
-            placeholder="Enter Aadhaar Number"
-            required
-            style={inputStyle}
-            maxLength={12}
-            pattern="\d*"
-            inputMode="numeric"
+            placeholder="Enter Voter ID (ABC1234567)"
           />
-          <label>Name</label>
           <input
             type="text"
             name="name"
@@ -378,6 +543,8 @@ function VoterAuthPage() {
           </button>
         </form>
       )}
+    </div>
+    
     </div>
   );
 }

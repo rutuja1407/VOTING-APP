@@ -1,108 +1,146 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcrypt');
 
-
 const userSchema = new mongoose.Schema({
-  aadhaar: {
+
+  voterId: {
     type: String,
-    required: [true, 'Aadhaar number is required'],
+    required: [true, 'Voter ID is required'],
     unique: true,
+    uppercase: true,
+    trim: true,
+    index: true,
     validate: {
       validator: function(v) {
-        return /^\d{12}$/.test(v);
+        return /^[A-Z]{3}\d{7}$/.test(v);
       },
-      message: 'Aadhaar number must be exactly 12 digits'
-    },
-    index: true
+      message: 'Voter ID must follow format ABC1234567'
+    }
   },
-  
+
   name: {
     type: String,
     required: [true, 'Full name is required'],
     trim: true,
-    minlength: [2, 'Name must be at least 2 characters long'],
-    maxlength: [100, 'Name cannot exceed 100 characters']
+    minlength: 2,
+    maxlength: 100
   },
-  
+
   phone: {
     type: String,
-    required: [true, 'Phone number is required'],
+    required: true,
     unique: true,
+    index: true,
     validate: {
       validator: function(v) {
         return /^[6-9]\d{9}$/.test(v);
       },
-      message: 'Phone number must be a valid 10-digit Indian mobile number starting with 6-9'
-    },
-    index: true
+      message: 'Invalid Indian mobile number'
+    }
   },
-  
+
   email: {
     type: String,
-    required: [true, 'Email is required'],
+    required: true,
     unique: true,
     lowercase: true,
     trim: true,
-    validate: {
-      validator: function(v) {
-        return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
-      },
-      message: 'Please enter a valid email address'
-    },
     index: true
   },
-  
+
   password: {
     type: String,
-    required: [true, 'Password is required'],
-    minlength: [8, 'Password must be at least 8 characters long']
+    required: true,
+    minlength: 8
   },
-  
+
   hasVoted: {
     type: Boolean,
     default: false,
     index: true
   },
-  
+
   userType: {
     type: String,
     enum: ['voter', 'admin'],
     default: 'voter'
   },
-  
+
   isActive: {
     type: Boolean,
     default: true
   },
-  
+
   registrationDate: {
     type: Date,
     default: Date.now
   },
-  
+
   votingDate: {
     type: Date,
     default: null
   },
-  faceDescriptor: 
-  { type: [Number], required: true }
-  ,
+
+  faceDescriptor: {
+    type: [Number],
+    required: true,
+    validate: {
+      validator: function(v) {
+        return Array.isArray(v) && v.length === 128;
+      },
+      message: 'Face descriptor must contain 128 values'
+    }
+  },
+
+  faceRegisteredAt: {
+    type: Date,
+    default: Date.now
+  }
+
 }, {
   timestamps: true,
-  collection: 'confirmed_voters' // This specifies the collection name
+  collection: 'confirmed_voters'
 });
 
-// Pre-save middleware to hash password
+
+/* -------------------------------
+   Password Hashing Middleware
+--------------------------------*/
 userSchema.pre('save', async function(next) {
+
   if (!this.isModified('password')) return next();
+
   try {
     this.password = await bcrypt.hash(this.password, 10);
     next();
   } catch (error) {
     next(error);
   }
+
 });
 
+
+/* -------------------------------
+   Compare Password Method
+--------------------------------*/
+userSchema.methods.comparePassword = async function(password) {
+  return await bcrypt.compare(password, this.password);
+};
+
+
+/* -------------------------------
+   Public Profile (hide password)
+--------------------------------*/
+userSchema.virtual('publicProfile').get(function () {
+  return {
+    voterId: this.voterId,
+    name: this.name,
+    phone: this.phone,
+    email: this.email,
+    hasVoted: this.hasVoted,
+    votingDate: this.votingDate
+  };
+});
 
 
 const User = mongoose.model('User', userSchema);

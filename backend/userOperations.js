@@ -1,67 +1,134 @@
-const User = require('./models/User');
+const User = require('./models/user');
 
-// Function to register a new user
+
+/* --------------------------------
+   REGISTER USER
+---------------------------------*/
 const registerUser = async (userData) => {
+
   try {
+
     const newUser = new User(userData);
+
     const savedUser = await newUser.save();
-    console.log('User registered successfully:', savedUser._id);
-    return { success: true, user: savedUser };
-  } catch (error) {
-    if (error.code === 11000) {
-      const duplicateField = Object.keys(error.keyPattern)[0];
-      return { 
-        success: false, 
-        error: `${duplicateField} already exists` 
-      };
-    }
-    return { 
-      success: false, 
-      error: error.message 
+
+    console.log("✅ User registered:", savedUser.voterId);
+
+    return {
+      success: true,
+      user: {
+        id: savedUser._id,
+        voterId: savedUser.voterId,
+        name: savedUser.name,
+        email: savedUser.email
+      }
     };
-  }
-};
 
-// Function to find user by Aadhaar number
-const findUserByAadhar = async (aadharNumber) => {
-  try {
-    const user = await User.findOne({ aadhar_number: aadharNumber });
-    return user;
   } catch (error) {
-    console.error('Error finding user:', error);
-    return null;
+
+    if (error.code === 11000) {
+
+      const duplicateField = Object.keys(error.keyPattern)[0];
+
+      return {
+        success: false,
+        error: `${duplicateField} already exists`
+      };
+
+    }
+
+    return {
+      success: false,
+      error: error.message
+    };
+
   }
+
 };
 
-// Function to update voting status
-const markUserAsVoted = async (aadharNumber) => {
+
+/* --------------------------------
+   FIND USER BY VOTER ID
+---------------------------------*/
+const findUserByVoterId = async (voterId) => {
+
   try {
+
+    const user = await User.findOne(
+      { voterId },
+      "-password"
+    );
+
+    return user;
+
+  } catch (error) {
+
+    console.error("Error finding user:", error);
+
+    return null;
+
+  }
+
+};
+
+
+/* --------------------------------
+   MARK USER AS VOTED
+---------------------------------*/
+const markUserAsVoted = async (voterId) => {
+
+  try {
+
     const user = await User.findOneAndUpdate(
-      { aadhar_number: aadharNumber },
-      { has_voted: true },
+      { voterId },
+      {
+        hasVoted: true,
+        votingDate: new Date()
+      },
       { new: true }
     );
+
     return user;
+
   } catch (error) {
-    console.error('Error updating voting status:', error);
+
+    console.error("Error updating voting status:", error);
+
     return null;
+
   }
+
 };
 
-// Function to get all users
+
+/* --------------------------------
+   GET ALL USERS
+---------------------------------*/
 const getAllUsers = async () => {
+
   try {
-    const users = await User.find({}, '-password'); // Exclude password field
+
+    const users = await User.find(
+      {},
+      "-password"
+    );
+
     return users;
+
   } catch (error) {
-    console.error('Error fetching users:', error);
+
+    console.error("Error fetching users:", error);
+
     return [];
+
   }
+
 };
+
 
 module.exports = {
   registerUser,
-  findUserByAadhar,
-  markUserAsVoted, 
+  findUserByVoterId,
+  markUserAsVoted,
   getAllUsers
 };

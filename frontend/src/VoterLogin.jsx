@@ -5,6 +5,7 @@ import "./LoginPage.css";
 import { toast } from "sonner";
 import { useUser } from './contexts/user.context';
 import { FiEye, FiEyeOff } from 'react-icons/fi';
+import Tesseract from "tesseract.js";
 
 function VoterLogin() {
   const [activeTab, setActiveTab] = useState("login");
@@ -20,7 +21,7 @@ function VoterLogin() {
 
   // Register form state
   const [registerData, setRegisterData] = useState({
-    aadhaar: "",
+    voterId: "",
     name: "",
     phone: "",
     email: "",
@@ -30,6 +31,7 @@ function VoterLogin() {
   const [registerError, setRegisterError] = useState("");
   const [registerCameraOn, setRegisterCameraOn] = useState(false);
   const [faceDescriptor, setFaceDescriptor] = useState(null);
+  const [voterIdDescriptor, setVoterIdDescriptor] = useState(null);
   const [showRegisterPassword, setShowRegisterPassword] = useState(false);
   const [showRegisterConfirmPassword, setShowRegisterConfirmPassword] = useState(false);
 
@@ -38,7 +40,8 @@ function VoterLogin() {
   const loginStreamRef = useRef(null);
   const registerVideoRef = useRef(null);
   const registerStreamRef = useRef(null);
-
+  const blinkDetectedRef = useRef(false);
+  const lastBlinkTimeRef = useRef(Date.now());
   // Load face-api.js models once on mount
   const [modelsLoaded, setModelsLoaded] = useState(false);
   const [modelsLoading, setModelsLoading] = useState(true);
@@ -71,39 +74,82 @@ function VoterLogin() {
       loginVideoRef.current.srcObject = loginStreamRef.current;
     }
   }, [loginCameraOn]);
-
-  // Set stream to video element when both are ready (register)
   useEffect(() => {
-    if (registerCameraOn && registerStreamRef.current && registerVideoRef.current) {
-      registerVideoRef.current.srcObject = registerStreamRef.current;
-    }
-  }, [registerCameraOn]);
 
-  // Camera toggle handlers
-  const toggleLoginCamera = async () => {
-    if (!modelsLoaded) {
-      toast.error("Face detection models are still loading, please wait.");
-      return;
-    }
-    if (loginCameraOn) {
-      loginStreamRef.current?.getTracks().forEach(track => track.stop());
-      loginStreamRef.current = null;
-      setLoginCameraOn(false);
-      setLoginDescriptor(null);
-      toast.info("Camera turned off");
-    } else {
-      try {
-        toast.loading("Starting camera...", { id: 'login-camera' });
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-        loginStreamRef.current = stream;
-        setLoginCameraOn(true);
-        toast.success("Camera ready!", { id: 'login-camera' });
-      } catch(error) {
-        console.error('Camera error:', error);
-        toast.error("Unable to access camera. Please allow permissions.", { id: 'login-camera' });
+    if (!loginCameraOn) return;
+
+    const interval = setInterval(async () => {
+
+      if (!loginVideoRef.current) return;
+
+      const detection = await faceapi
+        .detectSingleFace(
+          loginVideoRef.current,
+          new faceapi.TinyFaceDetectorOptions()
+        )
+        .withFaceLandmarks();
+
+      if (!detection) return;
+
+      const landmarks = detection.landmarks.positions;
+
+      const leftEye = landmarks.slice(36, 42);
+      const rightEye = landmarks.slice(42, 48);
+
+      const leftEAR = getEAR(leftEye);
+      const rightEAR = getEAR(rightEye);
+
+      const EAR_THRESHOLD = 0.25;
+
+      if (
+        leftEAR < EAR_THRESHOLD &&
+        rightEAR < EAR_THRESHOLD &&
+        Date.now() - lastBlinkTimeRef.current > 1000
+      ) {
+        lastBlinkTimeRef.current = Date.now();
+        blinkDetectedRef.current = true;
       }
-    }
-  };
+
+    }, 1000);
+
+    return () => clearInterval(interval);
+
+  }, [loginCameraOn]);
+
+    // Set stream to video element when both are ready (register)
+    useEffect(() => {
+      if (registerCameraOn && registerStreamRef.current && registerVideoRef.current) {
+        registerVideoRef.current.srcObject = registerStreamRef.current;
+      }
+    }, [registerCameraOn]);
+
+    // Camera toggle handlers
+    const toggleLoginCamera = async () => {
+      if (!modelsLoaded) {
+        toast.error("Face detection models are still loading, please wait.");
+        return;
+      }
+      if (loginCameraOn) {
+        loginStreamRef.current?.getTracks().forEach(track => track.stop());
+        loginStreamRef.current = null;
+        setLoginCameraOn(false);
+        setLoginDescriptor(null);
+        toast.info("Camera turned off");
+      } else {
+        try {
+          toast.loading("Starting camera...", { id: 'login-camera' });
+          const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+          loginStreamRef.current = stream;
+          setLoginCameraOn(true);
+          blinkDetectedRef.current = false;
+          lastBlinkTimeRef.current = Date.now();
+          toast.success("Camera ready!", { id: 'login-camera' });
+        } catch(error) {
+          console.error('Camera error:', error);
+          toast.error("Unable to access camera. Please allow permissions.", { id: 'login-camera' });
+        }
+      }
+    };
 
   const toggleRegisterCamera = async () => {
     if (!modelsLoaded) {
@@ -142,6 +188,13 @@ function VoterLogin() {
     }
     
     const video = registerVideoRef.current;
+    // Require blink before capturing face
+    const blink = await detectBlink(video);
+
+    if (!blink) {
+      toast.error("Please blink your eyes before capturing face");
+      return;
+    }
     try {
       toast.loading("Detecting face...", { id: 'register-face-capture' });
       const detection = await faceapi
@@ -161,63 +214,153 @@ function VoterLogin() {
       toast.error("Failed to capture face. Please try again.", { id: 'register-face-capture' });
     }
   };
+  // -----------------------
+// Blink Detection Helpers
+// -----------------------
+
+  const euclideanDistance = (p1, p2) => {
+    return Math.sqrt(
+      Math.pow(p1.x - p2.x, 2) +
+      Math.pow(p1.y - p2.y, 2)
+    );
+  };
+
+  const getEAR = (eye) => {
+    const A = euclideanDistance(eye[1], eye[5]);
+    const B = euclideanDistance(eye[2], eye[4]);
+    const C = euclideanDistance(eye[0], eye[3]);
+    return (A + B) / (2 * C);
+  };
+
+  const detectBlink = async (video) => {
+
+    const detection = await faceapi
+      .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions())
+      .withFaceLandmarks();
+
+    if (!detection) return false;
+
+    const landmarks = detection.landmarks.positions;
+
+    const leftEye = landmarks.slice(36, 42);
+    const rightEye = landmarks.slice(42, 48);
+
+    const leftEAR = getEAR(leftEye);
+    const rightEAR = getEAR(rightEye);
+
+    const EAR_THRESHOLD = 0.25;
+
+    if (leftEAR < EAR_THRESHOLD && rightEAR < EAR_THRESHOLD) {
+      blinkDetectedRef.current = true;
+      return true;
+    }
+
+    return false;
+  };
+
+  const detectVoterId = async (file) => {
+  try {
+    const { data } = await Tesseract.recognize(file, "eng");
+
+    const text = data.text.toUpperCase();
+
+    // Voter ID pattern example: ABC1234567
+    const voterIdRegex = /\b[A-Z]{3}[0-9]{7}\b/;
+
+    const match = text.match(voterIdRegex);
+
+    if (match) {
+      const voterId = match[0];
+      setRegisterData((prev) => ({ ...prev, voterId }));
+      toast.success("Voter ID detected: " + voterId);
+    } else {
+      toast.error("Could not detect voter ID");
+    }
+  } catch (error) {
+    console.error("OCR Error:", error);
+    toast.error("Failed to read voter ID");
+  }
+};
 
   // Capture face descriptor for login
   const captureLoginFace = async () => {
+
     if (!loginVideoRef.current) {
       toast.error("Camera not ready");
-      return;
+      return null;
     }
-    if (!modelsLoaded) {
-      toast.error("Face detection models not ready");
-      return;
+
+    // Require blink before capture
+    if (!blinkDetectedRef.current) {
+      toast.error("Please blink once before capturing");
+      return null;
     }
-    
-    const video = loginVideoRef.current;
-    try {
-      toast.loading("Detecting face...", { id: 'login-face-capture' });
-      const detection = await faceapi
-        .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions())
-        .withFaceLandmarks()
-        .withFaceDescriptor();
-      
-      if (!detection) {
-        toast.error("No face detected. Please ensure your face is clearly visible and try again.", { id: 'login-face-capture' });
-        return;
-      }
-      
-      setLoginDescriptor(Array.from(detection.descriptor));
-      toast.success("Face captured successfully for login!", { id: 'login-face-capture' });
-    } catch (error) {
-      console.error("Face capture error:", error);
-      toast.error("Failed to capture face. Please try again.", { id: 'login-face-capture' });
+
+    const detection = await faceapi
+      .detectSingleFace(
+        loginVideoRef.current,
+        new faceapi.TinyFaceDetectorOptions()
+      )
+      .withFaceLandmarks()
+      .withFaceDescriptor();
+
+    if (!detection) {
+      toast.error("No face detected");
+      return null;
     }
+
+    const descriptor = Array.from(detection.descriptor);
+
+    setLoginDescriptor(descriptor);
+
+    return descriptor;
   };
 
-  // Input handlers
-  const handleLoginChange = (e) => {
-    const { name, value } = e.target;
-    if (name === "userId") {
-      if (/^\d*$/.test(value)) {
-        setLoginData((prev) => ({ ...prev, [name]: value.slice(0, 12) }));
-      } else {
-        setLoginData((prev) => ({ ...prev, [name]: value }));
-      }
+  const handleVoterIdUpload = async (file) => {
+
+    if (!file) {
+      toast.error("Please upload a voter ID image");
       return;
     }
-    setLoginData((prev) => ({ ...prev, [name]: value }));
+
+    try {
+
+      const img = new Image();
+      img.src = URL.createObjectURL(file);
+
+      img.onload = async () => {
+
+        const detections = await faceapi
+          .detectAllFaces(img, new faceapi.TinyFaceDetectorOptions())
+          .withFaceLandmarks()
+          .withFaceDescriptors();
+
+        if (detections.length !== 1) {
+          toast.error("Voter ID must contain exactly one face");
+          return;
+        }
+
+        const descriptor = Array.from(detections[0].descriptor);
+
+        setVoterIdDescriptor(descriptor);
+
+        toast.success("Voter ID face captured successfully");
+      };
+
+    } catch (error) {
+      console.error("Voter ID detection error:", error);
+      toast.error("Failed to process voter ID image");
+    }
   };
+  // Input handlers
+    const handleLoginChange = (e) => {
+      const { name, value } = e.target;
+      setLoginData((prev) => ({ ...prev, [name]: value }));
+    };
+  
 
   const handleRegisterChange = (e) => {
     const { name, value } = e.target;
-    if (name === "aadhaar") {
-      const digitsOnly = value.replace(/\D/g, "");
-      setRegisterData((prev) => ({
-        ...prev,
-        [name]: digitsOnly.slice(0, 12),
-      }));
-      return;
-    }
     if (name === "phone") {
       const digitsOnly = value.replace(/\D/g, "");
       setRegisterData((prev) => ({
@@ -231,10 +374,11 @@ function VoterLogin() {
 
   // Submit handlers
   const handleSubmitLogin = async (e) => {
+    setLoginError("");
     e.preventDefault();
+    const loginDescriptor = await captureLoginFace();
     if (!loginDescriptor) {
-      setLoginError("Please capture your face to login.");
-      toast.error("Please capture your face to login.");
+      setLoginError("Face capture failed");
       return;
     }
     try {
@@ -243,14 +387,14 @@ function VoterLogin() {
         method: "POST",
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          userId: loginData.userId,
+          voterId: loginData.userId,
           password: loginData.password,
-          loginDescriptor: loginDescriptor, 
+          loginDescriptor, 
         }),
       });
       const data = await res.json();
       if (res.status === 200 && data.user.match) {
-        localStorage.setItem('aadhaar', data.user.aadhaar);
+        localStorage.setItem('voterId', data.user.voterId);
         toast.success("Login successful!", { id: 'login-submit' });
         setUser(data.user || {});
         navigate('/voter-dashboard');
@@ -276,17 +420,31 @@ function VoterLogin() {
   const handleSubmitRegister = async (e) => {
     e.preventDefault();
 
-    const aadhaarRegex = /^\d{12}$/;
     const phoneRegex = /^\d{10}$/;
     const password = registerData.password;
     const uppercaseRegex = /[A-Z]/;
     const symbolRegex = /[!@#$%^&*(),.?":{}|<>]/;
 
-    if (!aadhaarRegex.test(registerData.aadhaar)) {
-      setRegisterError("Aadhaar number must be exactly 12 digits.");
-      toast.error("Aadhaar number must be exactly 12 digits.");
+    if (!voterIdDescriptor) {
+      toast.error("Please upload voter ID card image");
       return;
     }
+
+    if (!faceDescriptor) {
+      toast.error("Please capture your face");
+      return;
+    }
+
+    const distance = faceapi.euclideanDistance(
+      faceDescriptor,
+      voterIdDescriptor
+    );
+
+    if (distance > 0.4) {
+      toast.error("Face does not match voter ID card");
+      return;
+    }
+
     if (!phoneRegex.test(registerData.phone)) {
       setRegisterError("Phone number must be exactly 10 digits.");
       toast.error("Phone number must be exactly 10 digits.");
@@ -324,7 +482,7 @@ function VoterLogin() {
         method: "POST",
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          aadhaar: registerData.aadhaar,
+          voterId: registerData.voterId,
           name: registerData.name,
           phone: registerData.phone,
           email: registerData.email,
@@ -338,7 +496,7 @@ function VoterLogin() {
         toast.success("Signup successful! You can now login.", { id: 'register-submit' });
         setFaceDescriptor(null);
         setRegisterData({
-          aadhaar: "",
+          voterId: "",
           name: "",
           phone: "",
           email: "",
@@ -398,7 +556,7 @@ function VoterLogin() {
             <input
               type="text"
               name="userId"
-              placeholder="Aadhaar or Email"
+              placeholder="Voter ID or Email"
               value={loginData.userId}
               onChange={handleLoginChange}
               className="login-input-theme"
@@ -407,6 +565,7 @@ function VoterLogin() {
             
             {/* Password field with eye icon */}
             <div style={{ position: 'relative', width: '100%' }}>
+              
               <input
                 type={showLoginPassword ? "text" : "password"}
                 name="password"
@@ -502,7 +661,7 @@ function VoterLogin() {
               type="submit"
               className="login-btn-theme voter-btn-theme"
               style={{ marginTop: "12px" }}
-              disabled={!loginDescriptor}
+              disabled={!loginCameraOn || !loginDescriptor}
             >
               Login
             </button>
@@ -514,13 +673,25 @@ function VoterLogin() {
           <form onSubmit={handleSubmitRegister} className="login-form-theme">
             <input
               type="text"
-              name="aadhaar"
-              placeholder="Aadhaar (12 digits)"
-              value={registerData.aadhaar}
+              name="voterId"
+              placeholder="Voter ID"
+              value={registerData.voterId}
               onChange={handleRegisterChange}
               className="login-input-theme"
               required
             />
+            <label className="file-upload">
+              Upload Voter ID Card
+              <input
+                type="file"
+                accept="image/png, image/jpeg, image/jpg"
+                onChange={(e) => {
+                  const file = e.target.files[0];
+                  detectVoterId(file);
+                  handleVoterIdUpload(file);
+                }}
+              />
+            </label>
             <input
               type="text"
               name="name"

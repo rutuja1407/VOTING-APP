@@ -1,5 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
+import * as faceapi from "face-api.js";
 import "./VoterDashboard.css";
 import { toast } from "sonner";
 import { useUser } from "./contexts/user.context";
@@ -16,8 +17,87 @@ function VoterDashboard() {
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [candidates, setCandidates] = useState([]);
   const { user, setUser } = useUser();
+  const videoRef = useRef(null);
+  const streamRef = useRef(null);
+  const monitorRef = useRef(null);
 
-  // Add a new state to track loading/voting action
+  const [referenceDescriptor, setReferenceDescriptor] = useState(null);
+
+  const captureReferenceFace = async () => {
+    if (!videoRef.current) return;
+
+    try {
+      const detection = await faceapi
+        .detectSingleFace(
+          videoRef.current,
+          new faceapi.TinyFaceDetectorOptions()
+        )
+        .withFaceLandmarks()
+        .withFaceDescriptor();
+
+      if (!detection) {
+        toast.error("Face not detected. Please stay in front of camera.");
+        return;
+      }
+
+      setReferenceDescriptor(detection.descriptor);
+
+      startContinuousMonitoring();
+
+    } catch (err) {
+      console.error("Reference face error:", err);
+    }
+  };
+
+  const startContinuousMonitoring = () => {
+
+    if (monitorRef.current) return;
+
+    monitorRef.current = setInterval(async () => {
+
+      if (!videoRef.current || !referenceDescriptor) return;
+
+      try {
+
+        const detections = await faceapi
+          .detectAllFaces(
+            videoRef.current,
+            new faceapi.TinyFaceDetectorOptions()
+          )
+          .withFaceLandmarks()
+          .withFaceDescriptors();
+
+        // No face
+        if (detections.length === 0) {
+          toast.error("Face not detected. Logging out.");
+          handleLogout();
+          return;
+        }
+
+        // Multiple faces
+        if (detections.length > 1) {
+          toast.error("Multiple faces detected. Logging out.");
+          handleLogout();
+          return;
+        }
+
+        const distance = faceapi.euclideanDistance(
+          referenceDescriptor,
+          detections[0].descriptor
+        );
+
+        if (distance > 0.45) {
+          toast.error("Different person detected. Logging out.");
+          handleLogout();
+        }
+
+      } catch (err) {
+        console.error("Monitoring error:", err);
+      }
+
+    }, 3000);
+  };
+
   const handleVote = (candidateId) => {
     const candidate = candidates.find((c) => c.id === candidateId);
     if (candidate) {
@@ -35,7 +115,7 @@ function VoterDashboard() {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            aadhaar: localStorage.getItem("aadhaar"),
+            voterId: localStorage.getItem("voterId"),
             position: selectedCandidate.position,
             candidateId: selectedCandidate._id,
           }),
@@ -77,7 +157,7 @@ function VoterDashboard() {
   const handleLogout = () => {
     toast.success("Logout successfull");
     setUser({});
-    localStorage.removeItem("aadhaar");
+    localStorage.removeItem("voterId");
     navigate("/", { replace: true });
   };
 
@@ -119,9 +199,45 @@ function VoterDashboard() {
     fetchCandidates();
   }, []);
 
+  useEffect(() => {
+  const startCamera = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+
+      streamRef.current = stream;
+
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
+
+      // capture reference face after camera starts
+      setTimeout(() => {
+        captureReferenceFace();
+      }, 2000);
+
+    } catch (err) {
+      console.error("Camera error:", err);
+      toast.error("Camera access required for voting security");
+    }
+  };
+
+  startCamera();
+
+  return () => {
+    streamRef.current?.getTracks().forEach(track => track.stop());
+    clearInterval(monitorRef.current);
+  };
+}, []);
+
   return (
     <div className="voter-dashboard">
-      {/* Header - Keep same */}
+      <video
+        ref={videoRef}
+        autoPlay
+        muted
+        playsInline
+        style={{ display: "none" }}
+      />
       <header className="dashboard-header">
         <div className="header-container">
           <div className="header-content">
@@ -276,7 +392,7 @@ function VoterDashboard() {
                 <div className="candidates-grid">
                   {candidates.map((candidate) => (
                     <div
-                      key={candidate.id}
+                      key={candidate._id}
                       className={`candidate-card ${
                         expandedCards[candidate.id] ? "expanded" : ""
                       }`}
@@ -383,7 +499,7 @@ function VoterDashboard() {
 
                           <div className="table-body">
                             {positionCandidates.map((candidate, index) => (
-                              <div key={candidate.id} className="table-row">
+                              <div key={candidate._id} className="table-row">
                                 <div className="table-cell serial">
                                   {index + 1}
                                 </div>

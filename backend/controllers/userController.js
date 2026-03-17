@@ -1,48 +1,83 @@
-const User = require('../models/User');
+const User = require('../models/user');
+const bcrypt = require('bcrypt');
 
-// Register new user
+function euclideanDistance(desc1, desc2) {
+  let sum = 0;
+  for (let i = 0; i < desc1.length; i++) {
+    sum += (desc1[i] - desc2[i]) ** 2;
+  }
+  return Math.sqrt(sum);
+}
+
+
 const registerUser = async (userData) => {
   try {
-    const { aadhar_number, full_name, phone_number, email_id, password, face_detected } = userData;
-    
-    // Check if user already exists
+    const { voterId, name, phone, email, password, faceDescriptor } = userData;
+
+    if (!voterId || !name || !phone || !email || !password || !faceDescriptor) {
+      return {
+        success: false,
+        message: 'All fields are required'
+      };
+    }
+
+    /* Check duplicate voterId / phone / email */
     const existingUser = await User.findOne({
       $or: [
-        { aadhar_number },
-        { phone_number },
-        { email_id }
+        { voterId },
+        { phone },
+        { email }
       ]
     });
-    
+
     if (existingUser) {
       let field = '';
-      if (existingUser.aadhar_number === aadhar_number) field = 'Aadhaar number';
-      else if (existingUser.phone_number === phone_number) field = 'Phone number';
-      else if (existingUser.email_id === email_id) field = 'Email address';
-      
+      if (existingUser.voterId === voterId) field = 'Voter ID';
+      else if (existingUser.phone === phone) field = 'Phone number';
+      else if (existingUser.email === email) field = 'Email';
+
       return {
         success: false,
         message: `${field} already registered`
       };
     }
-    
+
+    /* Duplicate face detection */
+    const users = await User.find({}, 'faceDescriptor');
+
+    for (const user of users) {
+      const distance = euclideanDistance(user.faceDescriptor, faceDescriptor);
+
+      if (distance < 0.5) {
+        return {
+          success: false,
+          message: 'Duplicate voter detected. Face already registered.'
+        };
+      }
+    }
+
     const newUser = new User({
-      aadhar_number,
-      full_name,
-      phone_number,
-      email_id,
+      voterId,
+      name,
+      phone,
+      email,
       password,
-      faceDescriptor: face_detected || false
+      faceDescriptor
     });
-    
+
     const savedUser = await newUser.save();
-    
+
     return {
       success: true,
       message: 'User registered successfully',
-      user: savedUser.publicProfile
+      user: {
+        voterId: savedUser.voterId,
+        name: savedUser.name,
+        phone: savedUser.phone,
+        email: savedUser.email
+      }
     };
-    
+
   } catch (error) {
     console.error('Registration error:', error);
     return {
@@ -53,42 +88,48 @@ const registerUser = async (userData) => {
   }
 };
 
-// Login user
+
 const loginUser = async (loginData) => {
   try {
-    const { aadhar_number, password } = loginData;
-    
-    if (!aadhar_number || !password) {
+    const { voterId, password } = loginData;
+
+    if (!voterId || !password) {
       return {
         success: false,
-        message: 'Please provide Aadhaar number and password'
+        message: 'Please provide voter ID and password'
       };
     }
-    
-    const user = await User.findOne({ aadhar_number });
-    
+
+    const user = await User.findOne({ voterId });
+
     if (!user) {
       return {
         success: false,
         message: 'Invalid credentials'
       };
     }
-    
-    const isPasswordValid = await user.comparePassword(password);
-    
+
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+
     if (!isPasswordValid) {
       return {
         success: false,
         message: 'Invalid credentials'
       };
     }
-    
+
     return {
       success: true,
       message: 'Login successful',
-      user: user.publicProfile
+      user: {
+        voterId: user.voterId,
+        name: user.name,
+        phone: user.phone,
+        email: user.email,
+        hasVoted: user.hasVoted
+      }
     };
-    
+
   } catch (error) {
     console.error('Login error:', error);
     return {
@@ -99,23 +140,23 @@ const loginUser = async (loginData) => {
   }
 };
 
-// Find user by Aadhaar
-const findUserByAadhar = async (aadharNumber) => {
+const findUserByVoterId = async (voterId) => {
   try {
-    const user = await User.findOne({ aadhar_number: aadharNumber }, '-password');
-    
+
+    const user = await User.findOne({ voterId }, '-password');
+
     if (!user) {
       return {
         success: false,
         message: 'User not found'
       };
     }
-    
+
     return {
       success: true,
-      user: user.publicProfile
+      user
     };
-    
+
   } catch (error) {
     console.error('Find user error:', error);
     return {
@@ -126,11 +167,11 @@ const findUserByAadhar = async (aadharNumber) => {
   }
 };
 
-// Mark user as voted
-const markUserAsVoted = async (aadharNumber) => {
+const markUserAsVoted = async (voterId) => {
   try {
-    const user = await User.findOne({ aadhar_number: aadharNumber });
-    
+
+    const user = await User.findOne({ voterId });
+
     if (!user) {
       return {
         success: false,
@@ -138,28 +179,31 @@ const markUserAsVoted = async (aadharNumber) => {
         statusCode: 404
       };
     }
-    
-    if (user.has_voted) {
+
+    if (user.hasVoted) {
       return {
         success: false,
         message: 'User has already voted',
         statusCode: 400
       };
     }
-    
-    await user.markAsVoted();
-    
+
+    user.hasVoted = true;
+    user.votingDate = new Date();
+
+    await user.save();
+
     return {
       success: true,
       message: 'Vote recorded successfully',
       user: {
-        aadhar_number: user.aadhar_number,
-        full_name: user.full_name,
-        has_voted: user.has_voted,
+        voterId: user.voterId,
+        name: user.name,
+        hasVoted: user.hasVoted,
         votingDate: user.votingDate
       }
     };
-    
+
   } catch (error) {
     console.error('Vote recording error:', error);
     return {
@@ -170,35 +214,31 @@ const markUserAsVoted = async (aadharNumber) => {
   }
 };
 
-// Get all users with pagination
+
 const getAllUsers = async (options = {}) => {
   try {
-    const { page = 1, limit = 10, sortBy = 'createdAt', sortOrder = 'desc' } = options;
-    
+
+    const { page = 1, limit = 10 } = options;
+
     const skip = (page - 1) * limit;
-    const sort = { [sortBy]: sortOrder === 'desc' ? -1 : 1 };
-    
+
     const users = await User.find({}, '-password')
-      .sort(sort)
       .skip(skip)
       .limit(limit)
       .lean();
-    
+
     const totalUsers = await User.countDocuments();
-    const stats = await User.getVotingStats();
-    
+
     return {
       success: true,
       pagination: {
         current_page: page,
         total_pages: Math.ceil(totalUsers / limit),
-        total_users: totalUsers,
-        users_per_page: limit
+        total_users: totalUsers
       },
-      statistics: stats,
       users
     };
-    
+
   } catch (error) {
     console.error('Fetch users error:', error);
     return {
@@ -209,55 +249,32 @@ const getAllUsers = async (options = {}) => {
   }
 };
 
-// Update face detection
-const updateFaceDetection = async (aadharNumber, faceDetected) => {
-  try {
-    const user = await User.findOneAndUpdate(
-      { aadhar_number: aadharNumber },
-      { face_detected: faceDetected },
-      { new: true, select: '-password' }
-    );
-    
-    if (!user) {
-      return {
-        success: false,
-        message: 'User not found',
-        statusCode: 404
-      };
-    }
-    
-    return {
-      success: true,
-      message: 'Face detection status updated',
-      user: user.publicProfile
-    };
-    
-  } catch (error) {
-    console.error('Face detection update error:', error);
-    return {
-      success: false,
-      message: 'Failed to update face detection status',
-      error: error.message
-    };
-  }
-};
 
-// Get voting statistics
+
 const getVotingStatistics = async () => {
   try {
-    return await User.getVotingStats();
+
+    const totalVoters = await User.countDocuments();
+    const voted = await User.countDocuments({ hasVoted: true });
+
+    return {
+      totalVoters,
+      voted,
+      remaining: totalVoters - voted
+    };
+
   } catch (error) {
     console.error('Statistics error:', error);
     throw error;
   }
 };
 
+
 module.exports = {
   registerUser,
   loginUser,
-  findUserByAadhar,
+  findUserByVoterId,
   markUserAsVoted,
   getAllUsers,
-  updateFaceDetection,
   getVotingStatistics
 };
