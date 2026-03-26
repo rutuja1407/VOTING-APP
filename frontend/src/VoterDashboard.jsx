@@ -17,6 +17,10 @@ function VoterDashboard() {
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [candidates, setCandidates] = useState([]);
   const [modelsLoaded, setModelsLoaded] = useState(false);
+  const [phase, setPhase] = useState("VIEW");
+
+  const [timeLeft, setTimeLeft] = useState(90);
+  const timerRef = useRef(null);
 
   const violationCountRef = useRef(0);
   const lastFaceBoxRef = useRef(null);
@@ -141,26 +145,28 @@ function VoterDashboard() {
 
   const captureReferenceFace = async () => {
     if (!videoRef.current || !modelsLoadedRef.current) return;
-
-    for (let attempt = 1; attempt <= 5; attempt++) {
+  
+    for (let attempt = 1; attempt <= 7; attempt++) {
       try {
         const detection = await faceapi
           .detectSingleFace(videoRef.current, detectorOptionsRef.current)
           .withFaceLandmarks()
           .withFaceDescriptor();
-
+  
         if (detection) {
+          stableFaceRef.current = detection.descriptor; // ✅ IMPORTANT
           toast.success("Face verified. Monitoring started.");
           startContinuousMonitoring();
           return;
         }
       } catch (err) {
-        console.error(`Face capture attempt ${attempt} failed:`, err);
+        console.error(`Face capture attempt ${attempt} failed`);
       }
-      await new Promise((r) => setTimeout(r, 800));
+  
+      await new Promise((r) => setTimeout(r, 500));
     }
-
-    toast.error("Face not detected. Sit closer with good lighting.");
+  
+    forceLogout("Face not detected properly");
   };
   const detectPhoneHeuristic = (detection) => {
     const landmarks = detection.landmarks;
@@ -237,6 +243,22 @@ function VoterDashboard() {
     localStorage.removeItem("voterId");
     navigate("/", { replace: true });
   };
+  const startTimer = (duration, onExpire) => {
+    clearInterval(timerRef.current);
+
+    setTimeLeft(duration);
+
+    timerRef.current = setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev <= 1) {
+          clearInterval(timerRef.current);
+          onExpire();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
 
   // ─── Effects ─────────────────────────────────────────────────────────────────
 
@@ -287,14 +309,89 @@ function VoterDashboard() {
   // Once models are ready, wait for video to stabilize then capture face
   useEffect(() => {
     if (!modelsLoaded) return;
-    const timer = setTimeout(captureReferenceFace, 1500);
-    return () => clearTimeout(timer);
+  
+    const waitForVideoAndStart = async () => {
+      const video = videoRef.current;
+  
+      if (!video) return;
+  
+      // ✅ Wait until video is actually ready
+      const checkReady = () =>
+        video.readyState >= 3 && video.videoWidth > 0;
+  
+      let attempts = 0;
+  
+      while (!checkReady() && attempts < 10) {
+        await new Promise((res) => setTimeout(res, 300));
+        attempts++;
+      }
+  
+      if (checkReady()) {
+        await captureReferenceFace(); // ✅ always runs properly
+      } else {
+        forceLogout("Camera not initialized properly");
+      }
+    };
+  
+    waitForVideoAndStart();
   }, [modelsLoaded]);
 
+  useEffect(() => {
+    if (!modelsLoaded) return;
+
+    // 🟢 Start VIEW phase (2 min)
+    startTimer(120, () => {
+      if (phase !== "VOTE") {
+        setPhase("VOTE");
+        setActiveTab("vote");
+    
+        startTimer(90, () => {
+          forceLogout("Voting time expired");
+        });
+      }
+    });
+  }, [modelsLoaded]);
+  useEffect(() => {
+    const handlePopState = () => {
+      if (phase === "VOTE") {
+        setPhase("LOCKED");
+
+        startTimer(60, () => {
+          forceLogout("Back navigation detected");
+        });
+
+        setActiveTab("candidates");
+      }
+    };
+
+    window.addEventListener("popstate", handlePopState);
+
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, [phase]);
+  useEffect(() => {
+    return () => clearInterval(timerRef.current);
+  }, []);
   // ─── Render ──────────────────────────────────────────────────────────────────
 
   return (
     <div className="voter-dashboard">
+      {/* Timer ui */}
+      <div
+        style={{
+          position: "fixed",
+          top: "16px",
+          left: "16px",
+          background: "#111",
+          color: "#fff",
+          padding: "10px 16px",
+          borderRadius: "8px",
+          fontWeight: "600",
+          zIndex: 9999,
+        }}
+      >
+        ⏳ Time {" "}
+        {Math.floor(timeLeft / 60)}:{String(timeLeft % 60).padStart(2, "0")}
+      </div>
       {/* Self-view pip — fixed top-right like Google/Zoom Meet */}
       <div
         ref={videoDisplayRef}
@@ -443,19 +540,41 @@ function VoterDashboard() {
           <div className="tabs-container">
             <div className="tabs-header">
               <div className="tabs-list">
-                {["candidates", "vote"].map((tab) => (
-                  <button
-                    key={tab}
-                    className={`tab-trigger ${
-                      activeTab === tab ? "active" : ""
-                    }`}
-                    onClick={() => setActiveTab(tab)}
-                  >
-                    {tab === "candidates"
-                      ? "View Candidates"
-                      : "Cast Your Vote"}
-                  </button>
-                ))}
+                {["candidates", "vote"]
+                  .filter((tab) => !(phase === "VOTE" && tab === "candidates"))
+                  .map((tab) => (
+                    <button
+                      key={tab}
+                      className={`tab-trigger ${
+                        activeTab === tab ? "active" : ""
+                      }`}
+                      onClick={() => {
+                        // ✅ Allow user to go to vote anytime
+                        if (tab === "vote") {
+                          setPhase("VOTE");
+                          setActiveTab("vote");
+                      
+                          // ✅ Start vote timer immediately
+                          startTimer(90, () => {
+                            forceLogout("Voting time expired");
+                          });
+                      
+                          return;
+                        }
+                      
+                        // ❌ Once in VOTE → never go back
+                        if (phase === "VOTE" && tab === "candidates") {
+                          return;
+                        }
+                      
+                        setActiveTab(tab);
+                      }}
+                    >
+                      {tab === "candidates"
+                        ? "View Candidates"
+                        : "Cast Your Vote"}
+                    </button>
+                  ))}
               </div>
             </div>
 
