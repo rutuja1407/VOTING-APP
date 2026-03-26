@@ -7,111 +7,191 @@ import { useUser } from "./contexts/user.context";
 
 function VoterDashboard() {
   const navigate = useNavigate();
+  const { user, setUser } = useUser();
+
   const [showRulesModal, setShowRulesModal] = useState(true);
   const [showVotingConfirmation, setShowVotingConfirmation] = useState(false);
   const [selectedCandidate, setSelectedCandidate] = useState(null);
-  const [votes, setVotes] = useState({});
   const [activeTab, setActiveTab] = useState("candidates");
   const [expandedCards, setExpandedCards] = useState({});
-  // Add state for terms acceptance checkbox
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [candidates, setCandidates] = useState([]);
   const [modelsLoaded, setModelsLoaded] = useState(false);
-  const [modelsLoading, setModelsLoading] = useState(true);
 
-  const { user, setUser } = useUser();
+  const violationCountRef = useRef(0);
+  const lastFaceBoxRef = useRef(null);
+  const stableFaceRef = useRef(null);
   const videoRef = useRef(null);
+  const videoDisplayRef = useRef(null);
   const streamRef = useRef(null);
   const monitorRef = useRef(null);
+  const modelsLoadedRef = useRef(false);
 
-  const [referenceDescriptor, setReferenceDescriptor] = useState(null);
+  // Stable ref so monitoring interval never has a stale closure
+  const detectorOptionsRef = useRef(
+    new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.4 })
+  );
 
-  const detectorOptions = new faceapi.TinyFaceDetectorOptions({
-    inputSize: 320, // or 224 or 256
-    scoreThreshold: 0.4, // more sensitive than 0.5
-  });
+  // ─── Monitoring ────────────────────────────────────────────────────────────
 
-  const captureReferenceFace = async () => {
-    if (!videoRef.current || !modelsLoaded) return;
-
-    const maxAttempts = 5;
-    let attempts = 0;
-
-    while (attempts < maxAttempts) {
-      attempts += 1;
-      console.log(
-        `Attempting to capture reference face (Attempt ${attempts}/${maxAttempts})`
-      );
-      try {
-        const detection = await faceapi
-          .detectSingleFace(videoRef.current, detectorOptions)
-          .withFaceLandmarks()
-          .withFaceDescriptor();
-
-        console.log("Detection result:", detection);
-
-        if (detection) {
-          toast.success("Reference face captured. Starting monitoring...");
-          setReferenceDescriptor(detection.descriptor);
-          startContinuousMonitoring();
-          return;
-        }
-      } catch (err) {
-        console.error("Reference face error:", err);
-      }
-
-      await new Promise((resolve) => setTimeout(resolve, 800));
+  const stopMonitoring = () => {
+    if (monitorRef.current) {
+      clearInterval(monitorRef.current);
+      monitorRef.current = null;
     }
+  };
 
-    toast.error(
-      "Face not detected. Please sit closer to the camera with good lighting."
-    );
+  const forceLogout = (reason) => {
+    stopMonitoring(); // ✅ stop interval FIRST before anything else
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
+    localStorage.clear();
+    window.location.href = "/";
+    toast.error("Logged out due to suspicious activity ");
   };
 
   const startContinuousMonitoring = () => {
     if (monitorRef.current) return;
-    if (!modelsLoaded) {
-      toast.error("Models not loaded yet");
-      return;
-    }
 
     monitorRef.current = setInterval(async () => {
-      if (!videoRef.current || !referenceDescriptor) return;
+      if (!modelsLoadedRef.current) return;
+
+      const video = videoRef.current;
+
+      if (
+        !video.srcObject ||
+        video.srcObject.getTracks().some((t) => t.readyState !== "live")
+      ) {
+        return "Camera turned off";
+      }
+
+      if (video.readyState < 2) return;
 
       try {
-        const detections = await faceapi
-          .detectAllFaces(videoRef.current, detectorOptions)
+        const detection = await faceapi
+          .detectSingleFace(video, detectorOptionsRef.current)
           .withFaceLandmarks()
-          .withFaceDescriptors();
+          .withFaceDescriptor();
 
-        // No face
-        if (detections.length === 0) {
-          toast.error("Face not detected. Logging out.");
-          handleLogout();
-          return;
-        }
+        const violation = await evaluateDetectionStable(detection);
 
-        // Multiple faces
-        if (detections.length > 1) {
-          toast.error("Multiple faces detected. Logging out.");
-          handleLogout();
-          return;
-        }
+        if (violation) {
+          violationCountRef.current++;
 
-        const distance = faceapi.euclideanDistance(
-          referenceDescriptor,
-          detections[0].descriptor
-        );
-
-        if (distance > 0.45) {
-          toast.error("Different person detected. Logging out.");
-          handleLogout();
+          // ✅ Only logout after consistent violations
+          if (violationCountRef.current >= 3) {
+            forceLogout(violation);
+          }
+        } else {
+          // ✅ Reset if stable
+          violationCountRef.current = 0;
         }
       } catch (err) {
         console.error("Monitoring error:", err);
       }
-    }, 3000);
+    }, 500); // ✅ faster loop
   };
+
+  const evaluateDetectionStable = async (detection) => {
+    // ❌ No face
+    if (!detection) return "No face detected";
+
+    const box = detection.detection.box;
+
+    // ✅ First frame → store reference
+    if (!stableFaceRef.current) {
+      stableFaceRef.current = detection.descriptor;
+      lastFaceBoxRef.current = box;
+      return null;
+    }
+
+    // ─── FACE MATCH CHECK ───
+    const distance = faceapi.euclideanDistance(
+      stableFaceRef.current,
+      detection.descriptor
+    );
+
+    if (distance > 0.6) {
+      return "Different person detected";
+    }
+
+    // ─── MOVEMENT CHECK (ANTI-SPOOF / HAND WAVING) ───
+    const lastBox = lastFaceBoxRef.current;
+
+    if (lastBox) {
+      const dx = Math.abs(box.x - lastBox.x);
+      const dy = Math.abs(box.y - lastBox.y);
+
+      if (dx > 80 || dy > 80) {
+        return "Suspicious movement detected";
+      }
+    }
+
+    lastFaceBoxRef.current = box;
+
+    // ─── MANUAL PHONE DETECTION (NO ML MODEL) ───
+    const phoneDetected = detectPhoneHeuristic(detection);
+
+    if (phoneDetected) {
+      return "Mobile phone detected";
+    }
+
+    return null;
+  };
+
+  const captureReferenceFace = async () => {
+    if (!videoRef.current || !modelsLoadedRef.current) return;
+
+    for (let attempt = 1; attempt <= 5; attempt++) {
+      try {
+        const detection = await faceapi
+          .detectSingleFace(videoRef.current, detectorOptionsRef.current)
+          .withFaceLandmarks()
+          .withFaceDescriptor();
+
+        if (detection) {
+          toast.success("Face verified. Monitoring started.");
+          startContinuousMonitoring();
+          return;
+        }
+      } catch (err) {
+        console.error(`Face capture attempt ${attempt} failed:`, err);
+      }
+      await new Promise((r) => setTimeout(r, 800));
+    }
+
+    toast.error("Face not detected. Sit closer with good lighting.");
+  };
+  const detectPhoneHeuristic = (detection) => {
+    const landmarks = detection.landmarks;
+
+    if (!landmarks) return false;
+
+    const jaw = landmarks.getJawOutline();
+    const nose = landmarks.getNose();
+
+    if (!jaw || !nose) return false;
+
+    // Approx face width
+    const faceWidth = Math.abs(jaw[16].x - jaw[0].x);
+
+    // If something is too close to face edges → likely phone
+    const leftSide = jaw[0].x;
+    const rightSide = jaw[16].x;
+
+    // Heuristic: sudden occlusion / edge disturbance
+    const faceBox = detection.detection.box;
+
+    if (
+      faceBox.width < 80 || // face partially blocked
+      faceBox.height < 80
+    ) {
+      return true;
+    }
+
+    return false;
+  };
+  // ─── Voting ─────────────────────────────────────────────────────────────────
 
   const handleVote = (candidateId) => {
     const candidate = candidates.find((c) => c.id === candidateId);
@@ -122,177 +202,131 @@ function VoterDashboard() {
   };
 
   const confirmVote = async () => {
-    if (selectedCandidate) {
-      setShowVotingConfirmation(false);
+    if (!selectedCandidate) return;
+    setShowVotingConfirmation(false);
 
-      try {
-        const res = await fetch("http://localhost:8000/api/vote/", {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            voterId: localStorage.getItem("voterId"),
-            position: selectedCandidate.position,
-            candidateId: selectedCandidate._id,
-          }),
-        });
+    try {
+      const res = await fetch("http://localhost:8000/api/vote/", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          voterId: localStorage.getItem("voterId"),
+          position: selectedCandidate.position,
+          candidateId: selectedCandidate._id,
+        }),
+      });
 
-        const data = await res.json();
-        console.log("data", data);
+      const data = await res.json();
 
-        if (res.status === 200) {
-          toast.success(
-            `Vote cast successfully for ${selectedCandidate.name}!`
-          );
-          // Update local votes state immediately
-          setVotes((prev) => ({
-            ...prev,
-            [selectedCandidate.position]: selectedCandidate.id,
-          }));
-          setUser((user) => ({ ...user, hasVoted: true }));
-        } else {
-          toast.error(data.error || "Failed to cast vote");
-        }
-      } catch (error) {
-        console.log("error casting vote", error);
-
-        toast.error("Failed to cast vote");
-      } finally {
-        setSelectedCandidate(null);
+      if (res.status === 200) {
+        toast.success(`Vote cast for ${selectedCandidate.name}!`);
+        setUser((prev) => ({ ...prev, hasVoted: true }));
+      } else {
+        toast.error(data.error || "Failed to cast vote");
       }
+    } catch {
+      toast.error("Failed to cast vote");
+    } finally {
+      setSelectedCandidate(null);
     }
   };
 
-  const toggleExpand = (candidateId) => {
-    setExpandedCards((prev) => ({
-      ...prev,
-      [candidateId]: !prev[candidateId],
-    }));
-  };
-
   const handleLogout = () => {
-    toast.success("Logout successfull");
+    toast.success("Logged out successfully");
     setUser({});
     localStorage.removeItem("voterId");
     navigate("/", { replace: true });
   };
 
-  // Updated closeRulesModal function with validation
-  const closeRulesModal = () => {
-    if (!termsAccepted) {
-      toast.error("Please accept the terms and conditions to proceed");
-      return;
-    }
-    setShowRulesModal(false);
-  };
+  // ─── Effects ─────────────────────────────────────────────────────────────────
 
-  // Handle checkbox change
-  const handleTermsChange = (event) => {
-    setTermsAccepted(event.target.checked);
-  };
-
-  const closeVotingConfirmation = () => {
-    setShowVotingConfirmation(false);
-    setSelectedCandidate(null);
-  };
-
+  // Fetch candidates once
   useEffect(() => {
-    const fetchCandidates = async () => {
-      try {
-        const res = await fetch("http://localhost:8000/api/candidates");
-        const data = await res.json();
-        if (res.status === 200) {
-          setCandidates(data.candidates);
-        } else {
-          toast.error(data.error || "Failed to fetch candidates");
-        }
-        console.log("Fetched candidates:", data);
-      } catch (error) {
-        console.log("Error fetching candidates:", error);
-        toast.error("Failed to fetch candidates");
-      }
-    };
-    fetchCandidates();
+    fetch("http://localhost:8000/api/candidates")
+      .then((r) => r.json())
+      .then((data) => setCandidates(data.candidates ?? []))
+      .catch(() => toast.error("Failed to fetch candidates"));
   }, []);
 
+  // Load face-api models once
   useEffect(() => {
-    const loadModels = async () => {
-      try {
-        const MODEL_URL = "/models";
-        toast.loading("Loading face detection models...", {
-          id: "dashboard-models-loading",
-        });
+    const MODEL_URL = "/models";
+    toast.loading("Loading face detection models...", { id: "models" });
 
-        await Promise.all([
-          faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
-          faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
-          faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
-        ]);
-
+    Promise.all([
+      faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
+      faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
+      faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
+    ])
+      .then(() => {
         setModelsLoaded(true);
-        toast.success("Face detection ready!", {
-          id: "dashboard-models-loading",
-        });
-      } catch (err) {
-        console.error("Dashboard model loading error:", err);
-        toast.error("Failed to load face detection models", {
-          id: "dashboard-models-loading",
-        });
-      } finally {
-        setModelsLoading(false);
-      }
-    };
-
-    loadModels();
+        modelsLoadedRef.current = true;
+        toast.success("Face detection ready!", { id: "models" });
+      })
+      .catch(() =>
+        toast.error("Failed to load face detection models", { id: "models" })
+      );
   }, []);
 
+  // Start camera — stream only, no monitoring yet
   useEffect(() => {
-    const startCamera = async () => {
-      if (!modelsLoaded) return;
-
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: true,
-        });
+    navigator.mediaDevices
+      .getUserMedia({ video: true })
+      .then((stream) => {
         streamRef.current = stream;
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
+          videoRef.current.onloadedmetadata = () => videoRef.current.play();
         }
+      })
+      .catch(() => forceLogout("Camera access denied"));
 
-        // try capturing reference after short delay
-        setTimeout(() => {
-          captureReferenceFace();
-        }, 1500);
-      } catch (err) {
-        console.error("Camera error:", err);
-        toast.error("Camera access required for voting security");
-      }
-    };
+    return () => stopMonitoring();
+  }, []);
 
-    startCamera();
-
-    return () => {
-      streamRef.current?.getTracks().forEach((track) => track.stop());
-      clearInterval(monitorRef.current);
-      monitorRef.current = null;
-    };
+  // Once models are ready, wait for video to stabilize then capture face
+  useEffect(() => {
+    if (!modelsLoaded) return;
+    const timer = setTimeout(captureReferenceFace, 1500);
+    return () => clearTimeout(timer);
   }, [modelsLoaded]);
+
+  // ─── Render ──────────────────────────────────────────────────────────────────
 
   return (
     <div className="voter-dashboard">
-      <video
-        ref={videoRef}
-        autoPlay
-        muted
-        playsInline
+      {/* Self-view pip — fixed top-right like Google/Zoom Meet */}
+      <div
+        ref={videoDisplayRef}
         style={{
-          opacity: 0,
-          position: "absolute",
-          top: 0,
-          left: 0,
-          width: "1px",
-          height: "1px",
+          position: "fixed",
+          top: "16px",
+          right: "16px",
+          width: "160px",
+          height: "160px",
+          borderRadius: "12px",
+          overflow: "hidden",
+          boxShadow: "0 4px 16px rgba(0,0,0,0.3)",
+          border: "2px solid #3b82f6",
+          zIndex: 9999,
+          backgroundColor: "#1f2937",
         }}
-      />
+      >
+        <video
+          ref={videoRef}
+          autoPlay
+          muted
+          style={{
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
+            transform: "scaleX(-1)",
+            display: "block",
+          }}
+        />
+      </div>
+
+      {/* Header */}
       <header className="dashboard-header">
         <div className="header-container">
           <div className="header-content">
@@ -307,7 +341,6 @@ function VoterDashboard() {
                 <p>Secure • Transparent • Democratic</p>
               </div>
             </div>
-
             <div className="header-actions">
               <button className="logout-btn" onClick={handleLogout}>
                 <svg className="logout-icon" viewBox="0 0 24 24">
@@ -320,10 +353,9 @@ function VoterDashboard() {
         </div>
       </header>
 
-      {/* Main Content */}
+      {/* Main */}
       <main className="dashboard-main">
         <div className="main-card">
-          {/* Conditionally render Dashboard Title Section - Only show for 'candidates' tab */}
           {activeTab === "candidates" && (
             <div
               className="dashboard-title-section"
@@ -337,119 +369,108 @@ function VoterDashboard() {
                 borderRadius: "12px 12px 0 0",
               }}
             >
-              <div className="dashboard-title-left">
-                <h1
-                  style={{
-                    fontSize: "28px",
-                    fontWeight: "700",
-                    color: "#1f2937",
-                    margin: "0",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "12px",
-                  }}
+              <h1
+                style={{
+                  fontSize: "28px",
+                  fontWeight: "700",
+                  color: "#1f2937",
+                  margin: 0,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "12px",
+                }}
+              >
+                <svg
+                  style={{ width: "32px", height: "32px", color: "#3b82f6" }}
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
                 >
-                  <svg
-                    style={{ width: "32px", height: "32px", color: "#3b82f6" }}
-                    viewBox="0 0 24 24"
-                    fill="currentColor"
-                  >
-                    <path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z" />
-                  </svg>
-                  Dashboard
-                </h1>
-              </div>
-
-              <div className="dashboard-title-right">
+                  <path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z" />
+                </svg>
+                Dashboard
+              </h1>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "12px",
+                  backgroundColor: "#f3f4f6",
+                  padding: "12px 20px",
+                  borderRadius: "8px",
+                  border: "1px solid #d1d5db",
+                }}
+              >
+                <svg
+                  style={{ width: "20px", height: "20px", color: "#6b7280" }}
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                >
+                  <path d="M16 4c0-1.11.89-2 2-2s2 .89 2 2-.89 2-2 2-2-.89-2-2zm4 18v-6h2.5l-2.54-7.63A2.996 2.996 0 0 0 17.15 7H16c-.8 0-1.54.37-2.01.97L12 10.5l-1.99-2.53C9.54 7.37 8.8 7 8 7H6.85c-1.18 0-2.24.75-2.81 1.37L1.5 16H4v6h4v-6h2.5l1.5-1.5L13.5 16H16v6h4z" />
+                </svg>
                 <div
                   style={{
                     display: "flex",
-                    alignItems: "center",
-                    gap: "12px",
-                    backgroundColor: "#f3f4f6",
-                    padding: "12px 20px",
-                    borderRadius: "8px",
-                    border: "1px solid #d1d5db",
+                    flexDirection: "column",
+                    alignItems: "flex-start",
                   }}
                 >
-                  <svg
-                    style={{ width: "20px", height: "20px", color: "#6b7280" }}
-                    viewBox="0 0 24 24"
-                    fill="currentColor"
-                  >
-                    <path d="M16 4c0-1.11.89-2 2-2s2 .89 2 2-.89 2-2 2-2-.89-2-2zm4 18v-6h2.5l-2.54-7.63A2.996 2.996 0 0 0 17.15 7H16c-.8 0-1.54.37-2.01.97L12 10.5l-1.99-2.53C9.54 7.37 8.8 7 8 7H6.85c-1.18 0-2.24.75-2.81 1.37L1.5 16H4v6h4v-6h2.5l1.5-1.5L13.5 16H16v6h4z" />
-                  </svg>
-                  <div
+                  <span
                     style={{
-                      display: "flex",
-                      flexDirection: "column",
-                      alignItems: "flex-start",
+                      fontSize: "24px",
+                      fontWeight: "700",
+                      color: "#1f2937",
+                      lineHeight: "1",
                     }}
                   >
-                    <span
-                      style={{
-                        fontSize: "24px",
-                        fontWeight: "700",
-                        color: "#1f2937",
-                        lineHeight: "1",
-                      }}
-                    >
-                      {candidates.length}
-                    </span>
-                    <span
-                      style={{
-                        fontSize: "12px",
-                        color: "#6b7280",
-                        fontWeight: "500",
-                        textTransform: "uppercase",
-                        letterSpacing: "0.5px",
-                      }}
-                    >
-                      Total Candidates
-                    </span>
-                  </div>
+                    {candidates.length}
+                  </span>
+                  <span
+                    style={{
+                      fontSize: "12px",
+                      color: "#6b7280",
+                      fontWeight: "500",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.5px",
+                    }}
+                  >
+                    Total Candidates
+                  </span>
                 </div>
               </div>
             </div>
           )}
 
-          {/* Tabs - Keep same */}
           <div className="tabs-container">
             <div className="tabs-header">
               <div className="tabs-list">
-                <button
-                  className={`tab-trigger ${
-                    activeTab === "candidates" ? "active" : ""
-                  }`}
-                  onClick={() => setActiveTab("candidates")}
-                >
-                  View Candidates
-                </button>
-                <button
-                  className={`tab-trigger ${
-                    activeTab === "vote" ? "active" : ""
-                  }`}
-                  onClick={() => setActiveTab("vote")}
-                >
-                  Cast Your Vote
-                </button>
+                {["candidates", "vote"].map((tab) => (
+                  <button
+                    key={tab}
+                    className={`tab-trigger ${
+                      activeTab === tab ? "active" : ""
+                    }`}
+                    onClick={() => setActiveTab(tab)}
+                  >
+                    {tab === "candidates"
+                      ? "View Candidates"
+                      : "Cast Your Vote"}
+                  </button>
+                ))}
               </div>
             </div>
 
-            {/* Candidates View */}
             {activeTab === "candidates" && (
               <div className="tab-content">
                 <div className="content-header">
                   <h2>Meet the Candidates</h2>
                   <p>Get to know the candidates before making your decision.</p>
                 </div>
-
                 <div className="candidates-grid">
                   {candidates.map((candidate) => (
                     <div
                       key={candidate._id}
                       className={`candidate-card ${
-                        expandedCards[candidate.id] ? "expanded" : ""
+                        expandedCards[candidate._id] ? "expanded" : ""
                       }`}
                     >
                       <div className="card-main">
@@ -457,7 +478,6 @@ function VoterDashboard() {
                           <img src={candidate.image} alt={candidate.name} />
                           <div className="party-tag">{candidate.party}</div>
                         </div>
-
                         <div className="candidate-info">
                           <div className="candidate-header">
                             <div>
@@ -470,11 +490,16 @@ function VoterDashboard() {
                             </div>
                             <button
                               className="expand-btn"
-                              onClick={() => toggleExpand(candidate.id)}
+                              onClick={() =>
+                                setExpandedCards((p) => ({
+                                  ...p,
+                                  [candidate._id]: !p[candidate._id],
+                                }))
+                              }
                             >
                               <svg
                                 className={`expand-icon ${
-                                  expandedCards[candidate.id] ? "rotated" : ""
+                                  expandedCards[candidate._id] ? "rotated" : ""
                                 }`}
                                 viewBox="0 0 24 24"
                               >
@@ -484,14 +509,12 @@ function VoterDashboard() {
                           </div>
                         </div>
                       </div>
-
                       <div className="expandable-content">
                         <div className="expandable-inner">
                           <div className="candidate-description">
                             <h4>About</h4>
                             <p>{candidate.description}</p>
                           </div>
-
                           <div className="candidate-experience">
                             <h4>Experience</h4>
                             <p>{candidate.age}</p>
@@ -504,25 +527,17 @@ function VoterDashboard() {
               </div>
             )}
 
-            {/* Voting Interface - CLEAN, NO DISTRACTIONS */}
             {activeTab === "vote" && (
               <div
                 className="tab-content"
-                style={{
-                  padding: "20px 32px",
-                  backgroundColor: "#ffffff",
-                }}
+                style={{ padding: "20px 32px", backgroundColor: "#ffffff" }}
               >
                 <div className="voting-container">
-                  {/* Removed the voting-header section completely for clean interface */}
-
-                  {/* Group candidates by position */}
                   {["President", "Vice President"].map((position) => {
                     const positionCandidates = candidates.filter(
                       (c) => c.position === position
                     );
-                    if (positionCandidates.length === 0) return null;
-
+                    if (!positionCandidates.length) return null;
                     return (
                       <div
                         key={position}
@@ -541,8 +556,6 @@ function VoterDashboard() {
                         >
                           {position} Candidates
                         </h3>
-
-                        {/* Table Format */}
                         <div className="voting-table">
                           <div className="table-header">
                             <div className="header-cell serial">#</div>
@@ -551,7 +564,6 @@ function VoterDashboard() {
                             </div>
                             <div className="header-cell action">Action</div>
                           </div>
-
                           <div className="table-body">
                             {positionCandidates.map((candidate, index) => (
                               <div key={candidate._id} className="table-row">
@@ -574,12 +586,12 @@ function VoterDashboard() {
                                 <div className="table-cell action">
                                   <button
                                     disabled={user.hasVoted}
+                                    className="vote-table-btn"
                                     style={{
                                       cursor: user.hasVoted
                                         ? "not-allowed"
                                         : "pointer",
                                     }}
-                                    className={`vote-table-btn`}
                                     onClick={() => handleVote(candidate.id)}
                                   >
                                     {user.hasVoted ? "Voted" : "Vote"}
@@ -599,13 +611,22 @@ function VoterDashboard() {
         </div>
       </main>
 
-      {/* Rules Modal with Terms and Conditions Checkbox */}
+      {/* Rules Modal */}
       {showRulesModal && (
         <div className="modal-overlay">
           <div className="modal-content">
             <div className="modal-header">
               <h3>Voting Rules & Guidelines</h3>
-              <button className="close-btn" onClick={closeRulesModal}>
+              <button
+                className="close-btn"
+                onClick={() => {
+                  if (!termsAccepted) {
+                    toast.error("Please accept the terms to proceed");
+                    return;
+                  }
+                  setShowRulesModal(false);
+                }}
+              >
                 ×
               </button>
             </div>
@@ -619,8 +640,6 @@ function VoterDashboard() {
                 </li>
                 <li>Ensure you read and accept the terms and conditions</li>
               </ul>
-
-              {/* Terms and Conditions Checkbox */}
               <div
                 className="terms-checkbox-container"
                 style={{
@@ -636,12 +655,8 @@ function VoterDashboard() {
                   type="checkbox"
                   id="terms-checkbox"
                   checked={termsAccepted}
-                  onChange={handleTermsChange}
-                  style={{
-                    width: "18px",
-                    height: "18px",
-                    cursor: "pointer",
-                  }}
+                  onChange={(e) => setTermsAccepted(e.target.checked)}
+                  style={{ width: "18px", height: "18px", cursor: "pointer" }}
                 />
                 <label
                   htmlFor="terms-checkbox"
@@ -659,9 +674,15 @@ function VoterDashboard() {
             <div className="modal-footer">
               <button
                 className={`modal-btn ${!termsAccepted ? "disabled" : ""}`}
-                onClick={closeRulesModal}
+                onClick={() => {
+                  if (!termsAccepted) {
+                    toast.error("Please accept the terms to proceed");
+                    return;
+                  }
+                  setShowRulesModal(false);
+                }}
                 style={{
-                  opacity: termsAccepted ? "1" : "0.5",
+                  opacity: termsAccepted ? 1 : 0.5,
                   cursor: termsAccepted ? "pointer" : "not-allowed",
                 }}
               >
@@ -672,12 +693,19 @@ function VoterDashboard() {
         </div>
       )}
 
+      {/* Vote Confirmation Modal */}
       {showVotingConfirmation && selectedCandidate && (
         <div className="modal-overlay">
           <div className="modal-content">
             <div className="modal-header">
               <h3>Confirm Your Vote</h3>
-              <button className="close-btn" onClick={closeVotingConfirmation}>
+              <button
+                className="close-btn"
+                onClick={() => {
+                  setShowVotingConfirmation(false);
+                  setSelectedCandidate(null);
+                }}
+              >
                 ×
               </button>
             </div>
@@ -699,7 +727,10 @@ function VoterDashboard() {
             <div className="modal-footer">
               <button
                 className="modal-btn secondary"
-                onClick={closeVotingConfirmation}
+                onClick={() => {
+                  setShowVotingConfirmation(false);
+                  setSelectedCandidate(null);
+                }}
               >
                 Cancel
               </button>
