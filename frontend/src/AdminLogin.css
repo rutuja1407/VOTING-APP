@@ -1,0 +1,98 @@
+*{
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+.admin-container {
+    display: flex;
+    height: 100vh;
+    width: 100vw;
+    font-family: "Inter", sans-serif;
+  }
+  
+  /* LEFT SIDE */
+  .admin-left {
+    width: 50%;
+    background: linear-gradient(135deg, #6d5cff, #d946ef);
+    color: white;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 60px;
+  }
+  
+  .admin-left h1 {
+    font-size: 42px;
+    font-weight: 800;
+    margin-bottom: 20px;
+  }
+  
+  .admin-left ul {
+    margin-top: 20px;
+  }
+  
+  .admin-left li {
+    margin-bottom: 10px;
+  }
+  
+  /* RIGHT SIDE */
+  .admin-right {
+    width: 50%;
+    background: #f4f5f7;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+  
+  /* CARD */
+  .admin-card {
+    background: white;
+    padding: 40px;
+    border-radius: 18px;
+    width: 480px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  
+  /* TITLE */
+  .admin-title {
+    font-size: 28px;
+    font-weight: 700;
+    margin-bottom: 20px;
+  }
+  
+  /* INPUT */
+  .admin-input {
+    width: 100%;
+    padding: 14px;
+    margin-bottom: 16px;
+    border-radius: 10px;
+    border: 1px solid #e5e7eb;
+    background: #f9fafb;
+  }
+  
+  .admin-input:focus {
+    border-color: #6d5cff;
+    background: white;
+  }
+  
+  /* BUTTON */
+  .admin-btn {
+    width: 100%;
+    padding: 14px;
+    border-radius: 10px;
+    border: none;
+    font-weight: 700;
+    color: white;
+    background: linear-gradient(90deg, #3b82f6, #7c3aed);
+    cursor: pointer;
+  }
+  
+  /* ERROR */
+  .admin-error {
+    color: red;
+    margin-bottom: 10px;
+  }
