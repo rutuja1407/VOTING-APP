@@ -38,7 +38,7 @@ const userSchema = new mongoose.Schema({
     required: true,
     minlength: 8
   },
-
+  
   hasVoted: {
     type: Boolean,
     default: false,
@@ -55,7 +55,10 @@ const userSchema = new mongoose.Schema({
     type: Boolean,
     default: true
   },
-
+  isBanned: {
+    type: Boolean,
+    default: false
+  },
   registrationDate: {
     type: Date,
     default: Date.now

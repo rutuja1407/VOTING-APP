@@ -177,6 +177,13 @@ router.post('/login', async (req, res) => {
       });
     }
 
+    const isBanned = user.isBanned || false;
+    if (isBanned) {
+      return res.status(403).json({
+        error: "User is banned due to suspicious activity"
+      });
+    }
+
     /* Check password */
     const isValidPassword = await bcrypt.compare(password, user.password);
 
@@ -252,4 +259,34 @@ router.get('/voter/:voterId', async (req, res) => {
 
 });
 
+// Ban user for suspicious activity
+router.patch('/:voterId/ban', async (req, res) => {
+  const { voterId } = req.params;
+  try {
+    
+    const user = await User.findOneAndUpdate({ voterId }, { isBanned: true }, { new: true });
+
+    if (!user) {
+      return res.status(404).json({
+        error: "User not found"
+      });
+    }
+
+    res.json({
+      message: `User ${user.name} has been banned`,
+      user: {
+        id: user._id,
+        voterId: user.voterId,
+        name: user.name,
+        isBanned: user.isBanned
+      }
+    });
+  } catch (error) {
+    console.error("Ban user error:", error);
+    res.status(500).json({
+      error: error.message
+    });
+    
+  }
+})
 module.exports = router;

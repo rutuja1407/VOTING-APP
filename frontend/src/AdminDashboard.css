@@ -4,8 +4,38 @@
   font-family: 'Inter', 'Segoe UI', Arial, sans-serif;
 }
 
-/* ===== THEME COLOR OVERRIDE (SAFE) ===== */
+/* ONLY entry animation */
 
+.toast-slide-right {
+  animation: slideFromRight 0.35s ease;
+}
+
+.toast-slide-left {
+  animation: slideFromLeft 0.35s ease;
+}
+
+@keyframes slideFromRight {
+  from {
+    opacity: 0;
+    transform: translateX(60px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideFromLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-60px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+/* ===== THEME COLOR OVERRIDE (SAFE) ===== */
 /* Header Gradient */
 
 /* Active Tab */

@@ -34,6 +34,7 @@ function VoterLogin() {
   const [showRegisterConfirmPassword, setShowRegisterConfirmPassword] =
     useState(false);
   const [imageUploading, setImageUploading] = useState(false);
+  const [extractedVoterName, setExtractedVoterName] = useState(null);
   // Webcam refs and streams
   const loginVideoRef = useRef(null);
   const loginStreamRef = useRef(null);
@@ -382,6 +383,33 @@ function VoterLogin() {
 
       toast.success("Face saved successfully!");
       setVoterIdDescriptor(descriptorArray);
+      try {
+        const { data } = await Tesseract.recognize(file, "eng");
+        const rawText = data.text
+        const nameMatch =
+        rawText.match(/Name[:\- ]+([A-Za-z ]+)/i) ||
+        rawText.match(/Elector['']?s?\s*Name[:\- ]+([A-Za-z ]+)/i)
+
+          if (nameMatch) {
+            const parsed = nameMatch[1]
+              .split("\n")[0]              // ✅ stop at the first newline — name is one line
+              .replace(/[^A-Za-z\s]/g, "") // ✅ strip | digits and any non-alpha noise
+              .replace(/\s+/g, " ")        // collapse multiple spaces
+              .trim()
+              .toUpperCase();
+          
+            setExtractedVoterName(parsed);
+            toast.info(`Name on Voter ID: ${parsed}`);
+          }
+        else {
+          // OCR ran but couldn't find a name label — warn but don't block yet
+          setExtractedVoterName(null);
+          toast.warning("Could not auto-detect name from Voter ID. Ensure the card is clear.");
+        }
+      } catch (ocrErr) {
+        console.error("OCR name extraction failed:", ocrErr);
+        setExtractedVoterName(null);
+      }
     } catch (err) {
       toast.error(err.message || "Failed to save face descriptor");
     } finally {
@@ -474,6 +502,28 @@ function VoterLogin() {
       return;
     }
 
+    if (!voterIdDescriptor) {
+      toast.error("Please upload voter ID card image");
+      return;
+    }
+
+    // // ✅ Name check — must happen before any API call
+    // if (!extractedVoterName) {
+    //   toast.error(
+    //     "Voter ID text could not be read. Please re-upload a clearer image."
+    //   );
+    //   return;
+    // }
+
+    // const enteredName = registerData.name.trim().toUpperCase();
+
+    // if (!extractedVoterName.includes(enteredName)) {
+    //   toast.error(
+    //     `Extracted name from ID: "${extractedVoterName}". Please ensure it matches the name you entered.`
+    //   );
+    //   setRegisterError("Name does not match the name on your Voter ID card.");
+    //   return;
+    // }
     if (!faceDescriptor) {
       toast.error("Please capture your face");
       return;
@@ -569,405 +619,409 @@ function VoterLogin() {
 
   return (
     <div className="login-container">
-
-        {/* LEFT SIDE (NEW UI) */}
-        <div className="login-left">
+      {/* LEFT SIDE (NEW UI) */}
+      <div className="login-left">
         <div className="left-logo-box">
-          <div className="logo-inner">
-            ✓
+          <div className="logo-inner">✓</div>
+        </div>
+
+        <h1 className="left-title">Smart Voting System</h1>
+
+        <ul className="left-features">
+          <li>Secure Authentication</li>
+          <li>Real-time Results</li>
+          <li>Tamper-proof Records</li>
+        </ul>
+      </div>
+
+      {/* RIGHT SIDE (YOUR EXISTING UI) */}
+      <div className="login-right">
+        <div className="login-card-theme">
+          <div className="login-icon-theme voter-theme">
+            {/* Voter icon */}
+            <svg width="44" height="44">
+              <rect width="44" height="44" rx="11" fill="#23A8F2" />
+              <circle
+                cx="22"
+                cy="18"
+                r="7"
+                stroke="#fff"
+                strokeWidth="3"
+                fill="none"
+              />
+              <rect x="13" y="33" width="18" height="4" rx="2" fill="#fff" />
+            </svg>
           </div>
-        </div>
+          <h2 className="login-title-theme">
+            Voter {activeTab === "login" ? "Login" : "Register"}
+          </h2>
 
-          <h1 className="left-title">Smart Voting System</h1>
+          {/* Tabs */}
+          <div className="login-tabs">
+            <button
+              className={activeTab === "login" ? "tab active" : "tab"}
+              onClick={() => setActiveTab("login")}
+            >
+              Login
+            </button>
+            <button
+              className={activeTab === "register" ? "tab active" : "tab"}
+              onClick={() => setActiveTab("register")}
+            >
+              Register
+            </button>
+          </div>
 
-          <ul className="left-features">
-            <li>Secure Authentication</li>
-            <li>Real-time Results</li>
-            <li>Tamper-proof Records</li>
-          </ul>
-        </div>
-
-        {/* RIGHT SIDE (YOUR EXISTING UI) */}
-        <div className="login-right">
-          <div className="login-card-theme">
-
-        <div className="login-icon-theme voter-theme">
-          {/* Voter icon */}
-          <svg width="44" height="44">
-            <rect width="44" height="44" rx="11" fill="#23A8F2" />
-            <circle
-              cx="22"
-              cy="18"
-              r="7"
-              stroke="#fff"
-              strokeWidth="3"
-              fill="none"
-            />
-            <rect x="13" y="33" width="18" height="4" rx="2" fill="#fff" />
-          </svg>
-        </div>
-        <h2 className="login-title-theme">
-          Voter {activeTab === "login" ? "Login" : "Register"}
-        </h2>
-
-        {/* Tabs */}
-        <div className="login-tabs">
-          <button
-            className={activeTab === "login" ? "tab active" : "tab"}
-            onClick={() => setActiveTab("login")}
-          >
-            Login
-          </button>
-          <button
-            className={activeTab === "register" ? "tab active" : "tab"}
-            onClick={() => setActiveTab("register")}
-          >
-            Register
-          </button>
-        </div>
-
-        {/* Login Form */}
-        {activeTab === "login" && (
-          <form onSubmit={handleSubmitLogin} className="login-form-theme">
-            <input
-              type="text"
-              name="userId"
-              placeholder="Voter ID"
-              value={loginData.userId}
-              onChange={handleLoginChange}
-              className="login-input-theme"
-              required
-            />
-
-            {/* Password field with eye icon */}
-            <div style={{ position: "relative", width: "100%" }}>
+          {/* Login Form */}
+          {activeTab === "login" && (
+            <form onSubmit={handleSubmitLogin} className="login-form-theme">
               <input
-                type={showLoginPassword ? "text" : "password"}
-                name="password"
-                placeholder="Password"
-                value={loginData.password}
+                type="text"
+                name="userId"
+                placeholder="Voter ID"
+                value={loginData.userId}
                 onChange={handleLoginChange}
                 className="login-input-theme"
                 required
               />
-              <button
-                type="button"
-                onClick={() => setShowLoginPassword(!showLoginPassword)}
-                style={{
-                  position: "absolute",
-                  right: "12px",
-                  top: "50%",
-                  transform: "translateY(-50%)",
-                  background: "none",
-                  border: "none",
-                  cursor: "pointer",
-                  padding: "8px",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  color: "#818398",
-                  transition: "color 0.2s ease",
-                }}
-                onMouseEnter={(e) => (e.currentTarget.style.color = "#6a5ae0")}
-                onMouseLeave={(e) => (e.currentTarget.style.color = "#818398")}
-                aria-label={
-                  showLoginPassword ? "Hide password" : "Show password"
-                }
-              >
-                {showLoginPassword ? (
-                  <FiEyeOff size={20} />
-                ) : (
-                  <FiEye size={20} />
-                )}
-              </button>
-            </div>
 
-            <button
-              type="button"
-              onClick={toggleLoginCamera}
-              className="camera-btn"
-              style={{ marginTop: "12px" }}
-              disabled={modelsLoading}
-            >
-              {modelsLoading
-                ? "Loading..."
-                : loginCameraOn
-                ? "Turn Off Camera"
-                : "Turn On Camera"}
-            </button>
-
-            {loginCameraOn && (
-              <div
-                style={{
-                  position: "relative",
-                  width: "100%",
-                  marginTop: "12px",
-                }}
-              >
-                <video
-                  ref={loginVideoRef}
-                  autoPlay
-                  muted
-                  playsInline
-                  width="100%"
-                  style={{ borderRadius: "12px" }}
+              {/* Password field with eye icon */}
+              <div style={{ position: "relative", width: "100%" }}>
+                <input
+                  type={showLoginPassword ? "text" : "password"}
+                  name="password"
+                  placeholder="Password"
+                  value={loginData.password}
+                  onChange={handleLoginChange}
+                  className="login-input-theme"
+                  required
                 />
                 <button
                   type="button"
-                  onClick={captureLoginFace}
-                  disabled={!loginCameraOn || !modelsLoaded}
+                  onClick={() => setShowLoginPassword(!showLoginPassword)}
                   style={{
                     position: "absolute",
-                    bottom: "12px",
-                    left: "50%",
-                    transform: "translateX(-50%)",
-                    width: "60px",
-                    height: "60px",
-                    borderRadius: "50%",
+                    right: "12px",
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    background: "none",
                     border: "none",
-                    backgroundImage: loginDescriptor
-                      ? "linear-gradient(90deg, #4CAF50 0%, #45a049 100%)"
-                      : "linear-gradient(90deg, #23a8f2 0%, #1de9b6 100%)",
-                    color: "#fff",
-                    fontWeight: "700",
-                    fontSize: "1.6rem",
                     cursor: "pointer",
-                    boxShadow: "0 4px 18px rgba(30,233,182,0.15)",
+                    padding: "8px",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    userSelect: "none",
-                    transition: "all 0.3s ease",
+                    color: "#818398",
+                    transition: "color 0.2s ease",
                   }}
-                  aria-label="Capture Face"
+                  onMouseEnter={(e) =>
+                    (e.currentTarget.style.color = "#6a5ae0")
+                  }
+                  onMouseLeave={(e) =>
+                    (e.currentTarget.style.color = "#818398")
+                  }
+                  aria-label={
+                    showLoginPassword ? "Hide password" : "Show password"
+                  }
                 >
-                  {loginDescriptor ? "✓" : "📸"}
+                  {showLoginPassword ? (
+                    <FiEyeOff size={20} />
+                  ) : (
+                    <FiEye size={20} />
+                  )}
                 </button>
               </div>
-            )}
 
-            {loginError && (
-              <div className="login-error-theme">{loginError}</div>
-            )}
+              <button
+                type="button"
+                onClick={toggleLoginCamera}
+                className="camera-btn"
+                style={{ marginTop: "12px" }}
+                disabled={modelsLoading}
+              >
+                {modelsLoading
+                  ? "Loading..."
+                  : loginCameraOn
+                  ? "Turn Off Camera"
+                  : "Turn On Camera"}
+              </button>
 
-            <button
-              type="submit"
-              className="login-btn-theme voter-btn-theme"
-              style={{ marginTop: "12px" }}
-              disabled={!loginCameraOn || !loginDescriptor}
-            >
-              Login
-            </button>
-          </form>
-        )}
+              {loginCameraOn && (
+                <div
+                  style={{
+                    position: "relative",
+                    width: "100%",
+                    marginTop: "12px",
+                  }}
+                >
+                  <video
+                    ref={loginVideoRef}
+                    autoPlay
+                    muted
+                    playsInline
+                    width="100%"
+                    style={{ borderRadius: "12px" }}
+                  />
+                  <button
+                    type="button"
+                    onClick={captureLoginFace}
+                    disabled={!loginCameraOn || !modelsLoaded}
+                    style={{
+                      position: "absolute",
+                      bottom: "12px",
+                      left: "50%",
+                      transform: "translateX(-50%)",
+                      width: "60px",
+                      height: "60px",
+                      borderRadius: "50%",
+                      border: "none",
+                      backgroundImage: loginDescriptor
+                        ? "linear-gradient(90deg, #4CAF50 0%, #45a049 100%)"
+                        : "linear-gradient(90deg, #23a8f2 0%, #1de9b6 100%)",
+                      color: "#fff",
+                      fontWeight: "700",
+                      fontSize: "1.6rem",
+                      cursor: "pointer",
+                      boxShadow: "0 4px 18px rgba(30,233,182,0.15)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      userSelect: "none",
+                      transition: "all 0.3s ease",
+                    }}
+                    aria-label="Capture Face"
+                  >
+                    {loginDescriptor ? "✓" : "📸"}
+                  </button>
+                </div>
+              )}
 
-        {/* Register Form */}
-        {activeTab === "register" && (
-          <form onSubmit={handleSubmitRegister} className="login-form-theme">
-            <input
-              type="text"
-              name="voterId"
-              placeholder="Voter ID"
-              value={registerData.voterId}
-              onChange={handleRegisterChange}
-              className="login-input-theme"
-              required
-            />
-            <label className="file-upload">
-              {imageUploading ? "Uploading..." : "Upload Voter ID Card Image"}
+              {loginError && (
+                <div className="login-error-theme">{loginError}</div>
+              )}
+
+              <button
+                type="submit"
+                className="login-btn-theme voter-btn-theme"
+                style={{ marginTop: "12px" }}
+                disabled={!loginCameraOn || !loginDescriptor}
+              >
+                Login
+              </button>
+            </form>
+          )}
+
+          {/* Register Form */}
+          {activeTab === "register" && (
+            <form onSubmit={handleSubmitRegister} className="login-form-theme">
               <input
-                type="file"
-                accept="image/png, image/jpeg, image/jpg"
-                onChange={(e) => {
-                  // const file = e.target.files[0];
-                  // detectVoterId(file);
-                  handleVoterCardUpload(e);
-                }}
-              />
-            </label>
-            <input
-              type="text"
-              name="name"
-              placeholder="Full Name"
-              value={registerData.name}
-              onChange={handleRegisterChange}
-              className="login-input-theme"
-              required
-            />
-            <input
-              type="text"
-              name="phone"
-              placeholder="Phone (10 digits)"
-              value={registerData.phone}
-              onChange={handleRegisterChange}
-              className="login-input-theme"
-              required
-            />
-
-            {/* Password field with eye icon */}
-            <div style={{ position: "relative", width: "100%" }}>
-              <input
-                type={showRegisterPassword ? "text" : "password"}
-                name="password"
-                placeholder="Password"
-                value={registerData.password}
+                type="text"
+                name="voterId"
+                placeholder="Voter ID"
+                value={registerData.voterId}
                 onChange={handleRegisterChange}
                 className="login-input-theme"
                 required
               />
-              <button
-                type="button"
-                onClick={() => setShowRegisterPassword(!showRegisterPassword)}
-                style={{
-                  position: "absolute",
-                  right: "12px",
-                  top: "50%",
-                  transform: "translateY(-50%)",
-                  background: "none",
-                  border: "none",
-                  cursor: "pointer",
-                  padding: "8px",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  color: "#818398",
-                  transition: "color 0.2s ease",
-                }}
-                onMouseEnter={(e) => (e.currentTarget.style.color = "#6a5ae0")}
-                onMouseLeave={(e) => (e.currentTarget.style.color = "#818398")}
-                aria-label={
-                  showRegisterPassword ? "Hide password" : "Show password"
-                }
-              >
-                {showRegisterPassword ? (
-                  <FiEyeOff size={20} />
-                ) : (
-                  <FiEye size={20} />
-                )}
-              </button>
-            </div>
-
-            {/* Confirm Password field with eye icon */}
-            <div style={{ position: "relative", width: "100%" }}>
+              <label className="file-upload">
+                {imageUploading ? "Uploading..." : "Upload Voter ID Card Image"}
+                <input
+                  type="file"
+                  accept="image/png, image/jpeg, image/jpg"
+                  onChange={(e) => {
+                    // const file = e.target.files[0];
+                    // detectVoterId(file);
+                    handleVoterCardUpload(e);
+                  }}
+                />
+              </label>
               <input
-                type={showRegisterConfirmPassword ? "text" : "password"}
-                name="confirmPassword"
-                placeholder="Confirm Password"
-                value={registerData.confirmPassword}
+                type="text"
+                name="name"
+                placeholder="Full Name"
+                value={registerData.name}
                 onChange={handleRegisterChange}
                 className="login-input-theme"
                 required
               />
-              <button
-                type="button"
-                onClick={() =>
-                  setShowRegisterConfirmPassword(!showRegisterConfirmPassword)
-                }
-                style={{
-                  position: "absolute",
-                  right: "12px",
-                  top: "50%",
-                  transform: "translateY(-50%)",
-                  background: "none",
-                  border: "none",
-                  cursor: "pointer",
-                  padding: "8px",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  color: "#818398",
-                  transition: "color 0.2s ease",
-                }}
-              >
-                {showRegisterConfirmPassword ? (
-                  <FiEyeOff size={20} />
-                ) : (
-                  <FiEye size={20} />
-                )}
-              </button>
-            </div>
+              <input
+                type="text"
+                name="phone"
+                placeholder="Phone (10 digits)"
+                value={registerData.phone}
+                onChange={handleRegisterChange}
+                className="login-input-theme"
+                required
+              />
 
-            <button
-              type="button"
-              onClick={toggleRegisterCamera}
-              className="camera-btn"
-              style={{ marginTop: "12px" }}
-              disabled={modelsLoading}
-            >
-              {modelsLoading
-                ? "Loading..."
-                : registerCameraOn
-                ? "Turn Off Camera"
-                : "Turn On Camera"}
-            </button>
-
-            {registerCameraOn && (
-              <div
-                style={{
-                  position: "relative",
-                  width: "100%",
-                  marginTop: "12px",
-                }}
-              >
-                <video
-                  ref={registerVideoRef}
-                  autoPlay
-                  muted
-                  playsInline
-                  width="100%"
-                  style={{ borderRadius: "12px" }}
+              {/* Password field with eye icon */}
+              <div style={{ position: "relative", width: "100%" }}>
+                <input
+                  type={showRegisterPassword ? "text" : "password"}
+                  name="password"
+                  placeholder="Password"
+                  value={registerData.password}
+                  onChange={handleRegisterChange}
+                  className="login-input-theme"
+                  required
                 />
                 <button
                   type="button"
-                  onClick={captureRegisterFace}
-                  disabled={!registerCameraOn || !modelsLoaded}
+                  onClick={() => setShowRegisterPassword(!showRegisterPassword)}
                   style={{
                     position: "absolute",
-                    bottom: "12px",
-                    left: "50%",
-                    transform: "translateX(-50%)",
-                    width: "60px",
-                    height: "60px",
-                    borderRadius: "50%",
+                    right: "12px",
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    background: "none",
                     border: "none",
-                    backgroundImage: faceDescriptor
-                      ? "linear-gradient(90deg, #4CAF50 0%, #45a049 100%)"
-                      : "linear-gradient(90deg, #23a8f2 0%, #1de9b6 100%)",
-                    color: "#fff",
-                    fontWeight: "700",
-                    fontSize: "1.6rem",
                     cursor: "pointer",
-                    boxShadow: "0 4px 18px rgba(30,233,182,0.15)",
+                    padding: "8px",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    userSelect: "none",
-                    transition: "all 0.3s ease",
+                    color: "#818398",
+                    transition: "color 0.2s ease",
                   }}
-                  aria-label="Capture Face"
+                  onMouseEnter={(e) =>
+                    (e.currentTarget.style.color = "#6a5ae0")
+                  }
+                  onMouseLeave={(e) =>
+                    (e.currentTarget.style.color = "#818398")
+                  }
+                  aria-label={
+                    showRegisterPassword ? "Hide password" : "Show password"
+                  }
                 >
-                  {faceDescriptor ? "✓" : "📸"}
+                  {showRegisterPassword ? (
+                    <FiEyeOff size={20} />
+                  ) : (
+                    <FiEye size={20} />
+                  )}
                 </button>
               </div>
-            )}
 
-            {registerError && (
-              <div className="login-error-theme">{registerError}</div>
-            )}
+              {/* Confirm Password field with eye icon */}
+              <div style={{ position: "relative", width: "100%" }}>
+                <input
+                  type={showRegisterConfirmPassword ? "text" : "password"}
+                  name="confirmPassword"
+                  placeholder="Confirm Password"
+                  value={registerData.confirmPassword}
+                  onChange={handleRegisterChange}
+                  className="login-input-theme"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() =>
+                    setShowRegisterConfirmPassword(!showRegisterConfirmPassword)
+                  }
+                  style={{
+                    position: "absolute",
+                    right: "12px",
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    background: "none",
+                    border: "none",
+                    cursor: "pointer",
+                    padding: "8px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: "#818398",
+                    transition: "color 0.2s ease",
+                  }}
+                >
+                  {showRegisterConfirmPassword ? (
+                    <FiEyeOff size={20} />
+                  ) : (
+                    <FiEye size={20} />
+                  )}
+                </button>
+              </div>
 
-            <button
-              type="submit"
-              className="login-btn-theme voter-btn-theme"
-              style={{ marginTop: "12px" }}
-            >
-              Register
-            </button>
-          </form>
-        )}
+              <button
+                type="button"
+                onClick={toggleRegisterCamera}
+                className="camera-btn"
+                style={{ marginTop: "12px" }}
+                disabled={modelsLoading}
+              >
+                {modelsLoading
+                  ? "Loading..."
+                  : registerCameraOn
+                  ? "Turn Off Camera"
+                  : "Turn On Camera"}
+              </button>
+
+              {registerCameraOn && (
+                <div
+                  style={{
+                    position: "relative",
+                    width: "100%",
+                    marginTop: "12px",
+                  }}
+                >
+                  <video
+                    ref={registerVideoRef}
+                    autoPlay
+                    muted
+                    playsInline
+                    width="100%"
+                    style={{ borderRadius: "12px" }}
+                  />
+                  <button
+                    type="button"
+                    onClick={captureRegisterFace}
+                    disabled={!registerCameraOn || !modelsLoaded}
+                    style={{
+                      position: "absolute",
+                      bottom: "12px",
+                      left: "50%",
+                      transform: "translateX(-50%)",
+                      width: "60px",
+                      height: "60px",
+                      borderRadius: "50%",
+                      border: "none",
+                      backgroundImage: faceDescriptor
+                        ? "linear-gradient(90deg, #4CAF50 0%, #45a049 100%)"
+                        : "linear-gradient(90deg, #23a8f2 0%, #1de9b6 100%)",
+                      color: "#fff",
+                      fontWeight: "700",
+                      fontSize: "1.6rem",
+                      cursor: "pointer",
+                      boxShadow: "0 4px 18px rgba(30,233,182,0.15)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      userSelect: "none",
+                      transition: "all 0.3s ease",
+                    }}
+                    aria-label="Capture Face"
+                  >
+                    {faceDescriptor ? "✓" : "📸"}
+                  </button>
+                </div>
+              )}
+
+              {registerError && (
+                <div className="login-error-theme">{registerError}</div>
+              )}
+
+              <button
+                type="submit"
+                className="login-btn-theme voter-btn-theme"
+                style={{ marginTop: "12px" }}
+              >
+                Register
+              </button>
+            </form>
+          )}
         </div>
       </div>
-  </div>
-  ); 
+    </div>
+  );
 }
 
 export default VoterLogin;

@@ -45,6 +45,7 @@ function EditCandidateModal({
   modalMode,
 }) {
   if (!open) return null;
+  // ✅ runs once on dashboard mount
   return (
     <div className="candidate-modal-overlay">
       <div className="candidate-modal" role="dialog" aria-modal="true">
@@ -599,23 +600,26 @@ export default function AdminDashboard() {
   const handleFileUpload = useCallback(async (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
-  
+
     if (file.type !== "text/csv" && !file.name.endsWith(".csv")) {
       toast.error("Please select a valid CSV file");
       event.target.value = "";
       return;
     }
-  
+
     const reader = new FileReader();
     reader.onload = async (e) => {
       try {
         const csvData = String(e.target?.result ?? "");
-        const lines = csvData.split("\n").map((l) => l.trim()).filter(Boolean);
+        const lines = csvData
+          .split("\n")
+          .map((l) => l.trim())
+          .filter(Boolean);
         if (lines.length < 2) {
           toast.error("CSV must contain at least one data row");
           return;
         }
-  
+
         const headers = lines[0]
           .split(",")
           .map((h) => h.trim().replace(/"/g, ""));
@@ -627,19 +631,19 @@ export default function AdminDashboard() {
           toast.error(`Missing columns: ${missing.join(", ")}`);
           return;
         }
-  
+
         const newCandidates = [];
         for (let i = 1; i < lines.length; i++) {
           const values = lines[i]
             .split(",")
             .map((v) => v.trim().replace(/"/g, ""));
           if (values.length !== headers.length) continue;
-  
+
           const obj = {};
           headers.forEach((h, idx) => {
             obj[h.toLowerCase()] = values[idx] || "";
           });
-  
+
           if (obj.name && obj.party && obj.position && obj.description) {
             newCandidates.push({
               name: obj.name,
@@ -655,23 +659,28 @@ export default function AdminDashboard() {
             });
           }
         }
-  
+
         if (!newCandidates.length) {
           toast.error("No valid candidate data found in CSV file");
           return;
         }
-  
+
         // Send to backend
-        const res = await fetch("http://localhost:8000/api/candidates/bulk-upload", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ candidates: newCandidates }),
-        });
-  
+        const res = await fetch(
+          "http://localhost:8000/api/candidates/bulk-upload",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ candidates: newCandidates }),
+          }
+        );
+
         const data = await res.json();
-  
+
         if (res.ok) {
-          toast.success(`Successfully uploaded ${data.candidates.length} candidates`);
+          toast.success(
+            `Successfully uploaded ${data.candidates.length} candidates`
+          );
           // Update frontend state if desired
           setCandidates((prev) => [...prev, ...data.candidates]);
         } else {
@@ -682,11 +691,10 @@ export default function AdminDashboard() {
         toast.error("Error parsing or uploading CSV");
       }
     };
-  
+
     reader.readAsText(file);
     event.target.value = "";
   }, []);
-  
 
   const handleExportCSV = useCallback(() => {
     try {
@@ -775,7 +783,7 @@ export default function AdminDashboard() {
       toast.error("Please select candidates to delete");
       return;
     }
-console.log("Deleting candidates:", Array.from(selectedCandidates));
+    console.log("Deleting candidates:", Array.from(selectedCandidates));
     try {
       await Promise.all(
         Array.from(selectedCandidates).map((id) =>
@@ -812,6 +820,52 @@ console.log("Deleting candidates:", Array.from(selectedCandidates));
     toast.success("Logout successful");
     navigate("/", { replace: true });
   }, [navigate]);
+
+  useEffect(() => {
+    const fetchAndShowNotifications = async () => {
+      try {
+        const res = await fetch(
+          "http://localhost:8000/api/notifications/admin/unread"
+        );
+        const data = await res.json();
+
+        const notifications = data.notifications ?? [];
+        if (notifications.length === 0) return;
+
+        const seen = new Set();
+        const unique = notifications.filter((notif) => {
+          if (seen.has(notif.voterId)) return false;
+          seen.add(notif.voterId);
+          return true;
+        });
+
+        const TOAST_DURATION = 4000;
+        const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
+
+        for (let i = 0; i < unique.length; i++) {
+          const notif = unique[i];
+
+          toast.warning(
+            `🚨 ${notif.voterName} (${notif.voterId}) was banned due to suspicious activity`,
+            {
+              duration: TOAST_DURATION,
+              className: i % 2 === 0 ? "toast-slide-right" : "toast-slide-left",
+            }
+          );
+
+          await sleep(TOAST_DURATION + 400); // small buffer only
+        }
+
+        await fetch("http://localhost:8000/api/notifications/admin/mark-read", {
+          method: "PATCH",
+        });
+      } catch (err) {
+        console.error("Failed to fetch admin notifications:", err);
+      }
+    };
+
+    fetchAndShowNotifications();
+  }, []);
 
   return (
     <div className="admin-dash-container">

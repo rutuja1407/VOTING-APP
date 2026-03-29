@@ -1,5 +1,6 @@
 const express = require('express');
 const mongoose = require('mongoose');
+
 const cors = require('cors');
 require('dotenv').config();
 
@@ -9,6 +10,7 @@ require('dotenv').config();
 const authRoutes = require('./routes/auth');
 const voteRoutes = require('./routes/vote');
 const candidateRoutes = require('./routes/candidate');
+const notificationRoutes = require('./routes/notification');
 
 const app = express();
 const PORT = process.env.PORT || 8000;
@@ -80,6 +82,7 @@ app.get('/', (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/vote', voteRoutes);
 app.use('/api/candidates', candidateRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 
 /* -----------------------------
