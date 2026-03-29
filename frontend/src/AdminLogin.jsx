@@ -89,6 +89,27 @@ function AdminLogin({ onLoginSuccess }) {
   };
 
 
+    // Only allow hardcoded admin credentials
+    if (userId === "admin1@domain.com" && password === "Admin123") {
+      const mockAdminData = {
+        id: "admin_001",
+        userId: userId,
+        name: "Administrator",
+        email: "admin1@domain.com",
+        role: "admin",
+      };
+      onLoginSuccess(mockAdminData);
+      toast.success("Login successful!");
+      navigate("/admin-dashboard");
+      setLoading(false);
+      return;
+    } else {
+      setError("Invalid credentials. Access denied.");
+      toast.error("Login failed: invalid credentials");
+      setLoading(false);
+      return;
+    }
+  };
 
   return (
 
@@ -201,9 +222,6 @@ function AdminLogin({ onLoginSuccess }) {
     </div>
 
   );
-
-}
-
 
 
 export default AdminLogin;
