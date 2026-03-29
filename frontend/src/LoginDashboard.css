@@ -1,14 +1,13 @@
 .dashboard-container {
   min-height: 100vh;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background: #f4f5f7;
+  font-family: "Inter", sans-serif;
 }
 
 /* Header */
 .dashboard-header {
-  background: rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(20px);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  background: white;
+  border-bottom: 1px solid #e5e7eb;
   padding: 1rem 0;
 }
 
@@ -36,14 +35,14 @@
 }
 
 .system-info h1 {
-  color: white;
+  color: #111827;
   font-size: 1.5rem;
   font-weight: 700;
   margin: 0;
 }
 
 .system-info p {
-  color: rgba(255, 255, 255, 0.8);
+  color: #6b7280;
   font-size: 0.9rem;
   margin: 0;
 }
@@ -52,9 +51,9 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  background: rgba(255, 255, 255, 0.2);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  color: white;
+  background: #f3f4f6;
+  border: none;
+  color:#111827;
   padding: 0.75rem 1.5rem;
   border-radius: 8px;
   cursor: pointer;
@@ -63,7 +62,7 @@
 }
 
 .logout-btn:hover {
-  background: rgba(255, 255, 255, 0.3);
+  background:  #e5e7eb;
   transform: translateY(-1px);
 }
 
@@ -80,10 +79,10 @@
 }
 
 .stats-card {
-  background: rgba(255, 255, 255, 0.95);
+  background: white;
   border-radius: 16px;
   padding: 2rem;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 10px 30px rgba(0,0,0,0.08);
   backdrop-filter: blur(20px);
   display: flex;
   align-items: center;

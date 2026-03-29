@@ -6,53 +6,90 @@ function WelcomePage() {
   const navigate = useNavigate();
 
   return (
-    <div className="welcome-bg">
-      <div className="welcome-main">
-        {/* Branding Section */}
-        <div className="brand-block">
-          <div className="brand-icon">
-            {/* SVG icon */}
-            <svg width="72" height="72">
-              <rect width="72" height="72" rx="18" fill="#6944EC" />
-              <polyline points="24,40 36,52 54,22" stroke="#fff" strokeWidth="6" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+    <div className="container">
+      
+      {/* LEFT SIDE */}
+      <div className="left-panel">
+        <div className="logo-box">
+          <div className="logo-inner">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+              <path
+                d="M20 6L9 17L4 12"
+                stroke="#7c3aed"
+                strokeWidth="3"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
             </svg>
           </div>
-          <h1 className="brand-title">
-            <span className="brand-gradient">DigiVote</span>
-          </h1>
-          <p className="brand-sub">Online Voting System</p>
-          <p className="brand-sub2">with Facial Detection</p>
         </div>
-        {/* Login Options */}
-        <div className="login-block">
-          <div className="login-card">
-            <div className="login-icon">
-              {/* Voter SVG */}
-              <svg width="44" height="44">
-                <rect width="44" height="44" rx="11" fill="#23A8F2"/>
-                <circle cx="22" cy="18" r="7" stroke="#fff" strokeWidth="3" fill="none"/>
-                <rect x="13" y="33" width="18" height="4" rx="2" fill="#fff"/>
-              </svg>
-            </div>
-            <h2>Voter Login</h2>
-            {/* FIXED: Correct navigation route */}
-            <button className="voter-btn" onClick={() => navigate("/voter-login")}>
-              Login as Voter
-            </button>
+
+        <h1 className="title">Smart Voting System</h1>
+
+        <ul className="features">
+          <li>Secure Authentication</li>
+          <li>Real-time Results</li>
+          <li>Tamper-proof Records</li>
+        </ul>
+      </div>
+
+      {/* RIGHT SIDE */}
+      <div className="right-panel">
+        <h2 className="welcome-text">Welcome Back</h2>
+        <p className="login-subtext">
+          Select your login type to continue
+        </p>
+
+        {/* VOTER */}
+        <div
+          className="login-card"
+          onClick={() => navigate("/voter-login")}
+        >
+          <div className="icon blue">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+              <circle cx="12" cy="8" r="4" stroke="white" strokeWidth="2" />
+              <path
+                d="M4 20C4 16 8 14 12 14C16 14 20 16 20 20"
+                stroke="white"
+                strokeWidth="2"
+                strokeLinecap="round"
+              />
+            </svg>
           </div>
-          <div className="login-card">
-            <div className="login-icon">
-              {/* Admin SVG */}
-              <svg width="44" height="44">
-                <rect width="44" height="44" rx="11" fill="#27e5a3"/>
-                <path d="M22 13l11 6v9c0 5.5-5.5 10-11 10s-11-4.5-11-10v-9l11-6z" stroke="#fff" strokeWidth="3" fill="none"/>
-              </svg>
-            </div>
-            <h2>Admin Login</h2>
-            <button className="admin-btn" onClick={() => navigate("/admin-login")}>
-              Login as Admin
-            </button>
+          <div className="card-text">
+            <h3>Voter Login</h3>
+            <p>Cast your vote securely</p>
           </div>
+          <span className="arrow">›</span>
+        </div>
+
+        {/* ADMIN */}
+        <div
+          className="login-card"
+          onClick={() => navigate("/admin-login")}
+        >
+          <div className="icon green">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+              <path
+                d="M12 3L20 7V12C20 17 16 20 12 21C8 20 4 17 4 12V7L12 3Z"
+                stroke="white"
+                strokeWidth="2"
+                strokeLinejoin="round"
+              />
+              <path
+                d="M9 12L11 14L15 10"
+                stroke="white"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </div>
+          <div className="card-text">
+            <h3>Admin Login</h3>
+            <p>Manage the voting system</p>
+          </div>
+          <span className="arrow">›</span>
         </div>
       </div>
     </div>

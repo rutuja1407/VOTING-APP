@@ -4,9 +4,97 @@
   font-family: 'Inter', 'Segoe UI', Arial, sans-serif;
 }
 
+/* ===== THEME COLOR OVERRIDE (SAFE) ===== */
+
+/* Header Gradient */
+
+/* Active Tab */
+.dash-nav-active {
+  background: linear-gradient(90deg, #6d5cff, #7c3aed, #00c7b7) !important;
+}
+
+/* Icons */
+.candidate-panel-icon,
+.bulk-operations-icon,
+.analytics-icon {
+  background: linear-gradient(90deg, #6d5cff, #7c3aed) !important;
+}
+
+/* Buttons */
+.add-candidate-btn,
+.bulk-import-btn {
+  background: linear-gradient(90deg, #6d5cff, #7c3aed) !important;
+}
+
+.add-candidate-btn:hover,
+.bulk-import-btn:hover {
+  background: linear-gradient(90deg, #7c3aed, #00c7b7) !important;
+}
+
+/* Export Button */
+.bulk-export-btn {
+  background: linear-gradient(90deg, #3b82f6, #7c3aed) !important;
+}
+
+/* Candidate Badges */
+.candidate-party {
+  background: #eef2ff !important;
+  color: #4f46e5 !important;
+}
+
+.candidate-position {
+  background: #f3e8ff !important;
+  color: #7c3aed !important;
+}
+
+/* Table Header */
+.candidate-table-header {
+  color: #6d5cff !important;
+}
+
+/* Avatar */
+.candidate-avatar {
+  background: linear-gradient(135deg, #c7d2fe, #e0e7ff) !important;
+  color: #4338ca !important;
+}
+
+/* Modal Save */
+.candidate-modal-save {
+  background: linear-gradient(90deg, #6d5cff, #7c3aed) !important;
+}
+
+/* Bulk Section Header */
+.bulk-list-header {
+  background: linear-gradient(135deg, #6d5cff, #7c3aed) !important;
+}
+
+/* Checkbox */
+.bulk-checkbox:checked {
+  background: linear-gradient(135deg, #6d5cff, #7c3aed) !important;
+  border-color: #6d5cff !important;
+}
+
+/* Analytics Cards */
+.analytics-card-icon.purple {
+  background: linear-gradient(135deg, #7c3aed, #6d5cff) !important;
+}
+
+/* Top Performers */
+.top-performers-header {
+  background: linear-gradient(135deg, #7c3aed, #00c7b7) !important;
+}
+
+.performer-progress-fill {
+  background: linear-gradient(90deg, #6d5cff, #7c3aed) !important;
+}
+
+.performer-rank {
+  background: linear-gradient(135deg, #6d5cff, #7c3aed) !important;
+}
+
 /* Header styles */
 .dash-header {
-  background: linear-gradient(90deg, #6a5ae0 0%, #00c7b7 100%);
+  background: linear-gradient(90deg, #6d5cff, #7c3aed, #00c7b7) !important;
   color: #fff;
   border-radius: 20px 20px 0 0;
   padding: 2rem 2.5rem 1.5rem 2.5rem;
@@ -85,25 +173,22 @@
 /* Navigation tabs */
 .dash-nav {
   display: flex;
-  gap: 2.2rem;
-  background: #fff;
-  border-radius: 0 0 18px 18px;
-  margin-top: -1rem;
-  box-shadow: 0 4px 12px rgba(106,90,224,0.08);
-  padding: 1.1rem 2.5rem;
-  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  margin: 2rem auto;
+  padding: 0.6rem;
+  width: fit-content;
+
+  background: linear-gradient(90deg, #7c3aed, #6d5cff, #06b6d4);
+  border-radius: 999px;
+  box-shadow: 0 8px 24px rgba(124, 58, 237, 0.3);
 }
 
 .dash-nav-item {
-  display: flex;
-  align-items: center;
-  gap: 0.7rem;
-  color: #6a5ae0;
-  font-weight: 500;
-  font-size: 1.07rem;
-  cursor: pointer;
-  position: relative;
-  transition: color 0.2s;
+  color: white;
+  padding: 0.6rem 1.4rem;
+  border-radius: 999px;
+  font-weight: 600;
 }
 
 .dash-nav-item:hover {

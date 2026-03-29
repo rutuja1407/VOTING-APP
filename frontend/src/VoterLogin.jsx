@@ -568,8 +568,29 @@ function VoterLogin() {
   };
 
   return (
-    <div className="login-bg">
-      <div className="login-card-theme">
+    <div className="login-container">
+
+        {/* LEFT SIDE (NEW UI) */}
+        <div className="login-left">
+        <div className="left-logo-box">
+          <div className="logo-inner">
+            ✓
+          </div>
+        </div>
+
+          <h1 className="left-title">Smart Voting System</h1>
+
+          <ul className="left-features">
+            <li>Secure Authentication</li>
+            <li>Real-time Results</li>
+            <li>Tamper-proof Records</li>
+          </ul>
+        </div>
+
+        {/* RIGHT SIDE (YOUR EXISTING UI) */}
+        <div className="login-right">
+          <div className="login-card-theme">
+
         <div className="login-icon-theme voter-theme">
           {/* Voter icon */}
           <svg width="44" height="44">
@@ -943,9 +964,10 @@ function VoterLogin() {
             </button>
           </form>
         )}
+        </div>
       </div>
-    </div>
-  );
+  </div>
+  ); 
 }
 
 export default VoterLogin;

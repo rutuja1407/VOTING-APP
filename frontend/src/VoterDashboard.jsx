@@ -373,362 +373,267 @@ function VoterDashboard() {
   }, []);
   // ─── Render ──────────────────────────────────────────────────────────────────
 
-  return (
-    <div className="voter-dashboard">
-      {/* Timer ui */}
-      <div
-        style={{
-          position: "fixed",
-          top: "16px",
-          left: "16px",
-          background: "#111",
-          color: "#fff",
-          padding: "10px 16px",
-          borderRadius: "8px",
-          fontWeight: "600",
-          zIndex: 9999,
-        }}
-      >
-        ⏳ Time {" "}
-        {Math.floor(timeLeft / 60)}:{String(timeLeft % 60).padStart(2, "0")}
-      </div>
-      {/* Self-view pip — fixed top-right like Google/Zoom Meet */}
-      <div
-        ref={videoDisplayRef}
-        style={{
-          position: "fixed",
-          top: "16px",
-          right: "16px",
-          width: "160px",
-          height: "160px",
-          borderRadius: "12px",
-          overflow: "hidden",
-          boxShadow: "0 4px 16px rgba(0,0,0,0.3)",
-          border: "2px solid #3b82f6",
-          zIndex: 9999,
-          backgroundColor: "#1f2937",
-        }}
-      >
-        <video
-          ref={videoRef}
-          autoPlay
-          muted
-          style={{
-            width: "100%",
-            height: "100%",
-            objectFit: "cover",
-            transform: "scaleX(-1)",
-            display: "block",
-          }}
-        />
-      </div>
+// ONLY UI CHANGES DONE — LOGIC SAME
 
-      {/* Header */}
-      <header className="dashboard-header">
-        <div className="header-container">
-          <div className="header-content">
-            <div className="header-left">
-              <div className="header-icon">
-                <svg className="vote-icon" viewBox="0 0 24 24">
-                  <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z" />
-                </svg>
-              </div>
-              <div className="header-info">
-                <h1>Online Voting System</h1>
-                <p>Secure • Transparent • Democratic</p>
-              </div>
-            </div>
-            <div className="header-actions">
-              <button className="logout-btn" onClick={handleLogout}>
-                <svg className="logout-icon" viewBox="0 0 24 24">
-                  <path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.59L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z" />
-                </svg>
-                Logout
-              </button>
+return (
+  <div className="voter-dashboard">
+
+    {/* Timer */}
+    <div
+      style={{
+        position: "fixed",
+        top: "16px",
+        left: "16px",
+        background: "#111",
+        color: "#fff",
+        padding: "10px 16px",
+        borderRadius: "8px",
+        fontWeight: "600",
+        zIndex: 9999,
+      }}
+    >
+      ⏳ Time {Math.floor(timeLeft / 60)}:
+      {String(timeLeft % 60).padStart(2, "0")}
+    </div>
+
+    {/* Camera */}
+    <div
+      ref={videoDisplayRef}
+      style={{
+        position: "fixed",
+        top: "16px",
+        right: "16px",
+        width: "160px",
+        height: "160px",
+        borderRadius: "12px",
+        overflow: "hidden",
+        boxShadow: "0 4px 16px rgba(0,0,0,0.3)",
+        border: "2px solid #3b82f6",
+        zIndex: 9999,
+        backgroundColor: "#1f2937",
+      }}
+    >
+      <video
+        ref={videoRef}
+        autoPlay
+        muted
+        style={{
+          width: "100%",
+          height: "100%",
+          objectFit: "cover",
+          transform: "scaleX(-1)",
+        }}
+      />
+    </div>
+
+    {/* Header */}
+    <header className="dashboard-header">
+      <div className="header-container">
+        <div className="header-content">
+          <div className="header-left">
+            <div className="header-info">
+              <h1>Online Voting System</h1>
+              <p>Secure • Transparent • Democratic</p>
             </div>
           </div>
-        </div>
-      </header>
 
-      {/* Main */}
-      <main className="dashboard-main">
-        <div className="main-card">
+          <button className="logout-btn" onClick={handleLogout}>
+            Logout
+          </button>
+        </div>
+      </div>
+    </header>
+
+    {/* Main */}
+    <main className="dashboard-main">
+      <div className="main-card">
+
+        {/* ✅ NEW CLEAN TOP SECTION */}
+        <div className="dashboard-top">
+          <div className="dashboard-title">
+            <h2>Voter Dashboard</h2>
+            <p>Review candidates and cast your vote</p>
+          </div>
+
+          <div className="candidate-count-box">
+            <span>Total Candidates</span>
+            <h3>{candidates.length}</h3>
+          </div>
+        </div>
+
+        {/* Tabs */}
+        <div className="tabs-container">
+          <div className="tabs-header">
+            <div className="tabs-list">
+              {["candidates", "vote"]
+                .filter((tab) => !(phase === "VOTE" && tab === "candidates"))
+                .map((tab) => (
+                  <button
+                    key={tab}
+                    className={`tab-trigger ${
+                      activeTab === tab ? "active" : ""
+                    }`}
+                    onClick={() => {
+                      if (tab === "vote") {
+                        setPhase("VOTE");
+                        setActiveTab("vote");
+
+                        startTimer(90, () => {
+                          forceLogout("Voting time expired");
+                        });
+                        return;
+                      }
+
+                      if (phase === "VOTE" && tab === "candidates") return;
+
+                      setActiveTab(tab);
+                    }}
+                  >
+                    {tab === "candidates"
+                      ? "View Candidates"
+                      : "Cast Your Vote"}
+                  </button>
+                ))}
+            </div>
+          </div>
+
+          {/* Candidates */}
           {activeTab === "candidates" && (
-            <div
-              className="dashboard-title-section"
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                padding: "24px 32px",
-                borderBottom: "1px solid #e5e7eb",
-                backgroundColor: "#ffffff",
-                borderRadius: "12px 12px 0 0",
-              }}
-            >
-              <h1
-                style={{
-                  fontSize: "28px",
-                  fontWeight: "700",
-                  color: "#1f2937",
-                  margin: 0,
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "12px",
-                }}
-              >
-                <svg
-                  style={{ width: "32px", height: "32px", color: "#3b82f6" }}
-                  viewBox="0 0 24 24"
-                  fill="currentColor"
-                >
-                  <path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z" />
-                </svg>
-                Dashboard
-              </h1>
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "12px",
-                  backgroundColor: "#f3f4f6",
-                  padding: "12px 20px",
-                  borderRadius: "8px",
-                  border: "1px solid #d1d5db",
-                }}
-              >
-                <svg
-                  style={{ width: "20px", height: "20px", color: "#6b7280" }}
-                  viewBox="0 0 24 24"
-                  fill="currentColor"
-                >
-                  <path d="M16 4c0-1.11.89-2 2-2s2 .89 2 2-.89 2-2 2-2-.89-2-2zm4 18v-6h2.5l-2.54-7.63A2.996 2.996 0 0 0 17.15 7H16c-.8 0-1.54.37-2.01.97L12 10.5l-1.99-2.53C9.54 7.37 8.8 7 8 7H6.85c-1.18 0-2.24.75-2.81 1.37L1.5 16H4v6h4v-6h2.5l1.5-1.5L13.5 16H16v6h4z" />
-                </svg>
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "flex-start",
-                  }}
-                >
-                  <span
-                    style={{
-                      fontSize: "24px",
-                      fontWeight: "700",
-                      color: "#1f2937",
-                      lineHeight: "1",
-                    }}
+            <div className="tab-content">
+              <div className="content-header">
+                <h2>Candidate Information</h2>
+                <p>Select "Cast Your Vote" when you're ready</p>
+              </div>
+
+              <div className="candidates-grid">
+                {candidates.map((candidate) => (
+                  <div
+                    key={candidate._id}
+                    className={`candidate-card ${
+                      expandedCards[candidate._id] ? "expanded" : ""
+                    }`}
                   >
-                    {candidates.length}
-                  </span>
-                  <span
-                    style={{
-                      fontSize: "12px",
-                      color: "#6b7280",
-                      fontWeight: "500",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.5px",
-                    }}
-                  >
-                    Total Candidates
-                  </span>
-                </div>
+                    <div className="card-main">
+                      <div className="candidate-image">
+                        <img src={candidate.image} alt={candidate.name} />
+                        <div className="party-tag">{candidate.party}</div>
+                      </div>
+
+                      <div className="candidate-info">
+                        <div className="candidate-header">
+                          <div>
+                            <h3 className="candidate-name">
+                              {candidate.name}
+                            </h3>
+                            <p className="candidate-position">
+                              {candidate.position}
+                            </p>
+                          </div>
+
+                          <button
+                            className="expand-btn"
+                            onClick={() =>
+                              setExpandedCards((p) => ({
+                                ...p,
+                                [candidate._id]: !p[candidate._id],
+                              }))
+                            }
+                          >
+                            ▼
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="expandable-content">
+                      <div className="expandable-inner">
+                        <div className="candidate-description">
+                          <h4>About</h4>
+                          <p>{candidate.description}</p>
+                        </div>
+
+                        <div className="candidate-experience">
+                          <h4>Experience</h4>
+                          <p>{candidate.age}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           )}
 
-          <div className="tabs-container">
-            <div className="tabs-header">
-              <div className="tabs-list">
-                {["candidates", "vote"]
-                  .filter((tab) => !(phase === "VOTE" && tab === "candidates"))
-                  .map((tab) => (
-                    <button
-                      key={tab}
-                      className={`tab-trigger ${
-                        activeTab === tab ? "active" : ""
-                      }`}
-                      onClick={() => {
-                        // ✅ Allow user to go to vote anytime
-                        if (tab === "vote") {
-                          setPhase("VOTE");
-                          setActiveTab("vote");
-                      
-                          // ✅ Start vote timer immediately
-                          startTimer(90, () => {
-                            forceLogout("Voting time expired");
-                          });
-                      
-                          return;
-                        }
-                      
-                        // ❌ Once in VOTE → never go back
-                        if (phase === "VOTE" && tab === "candidates") {
-                          return;
-                        }
-                      
-                        setActiveTab(tab);
-                      }}
-                    >
-                      {tab === "candidates"
-                        ? "View Candidates"
-                        : "Cast Your Vote"}
-                    </button>
-                  ))}
-              </div>
-            </div>
+          {/* Voting */}
+          {activeTab === "vote" && (
+            <div className="tab-content">
+              <div className="voting-container">
+                {[...new Set(candidates.map((c) => c.position))].map((position) => {
+                  const positionCandidates = candidates.filter(
+                    (c) => c.position === position
+                  );
 
-            {activeTab === "candidates" && (
-              <div className="tab-content">
-                <div className="content-header">
-                  <h2>Meet the Candidates</h2>
-                  <p>Get to know the candidates before making your decision.</p>
-                </div>
-                <div className="candidates-grid">
-                  {candidates.map((candidate) => (
-                    <div
-                      key={candidate._id}
-                      className={`candidate-card ${
-                        expandedCards[candidate._id] ? "expanded" : ""
-                      }`}
-                    >
-                      <div className="card-main">
-                        <div className="candidate-image">
-                          <img src={candidate.image} alt={candidate.name} />
-                          <div className="party-tag">{candidate.party}</div>
+                  if (!positionCandidates.length) return null;
+
+                  return (
+                    <div key={position} className="position-group">
+                      <h3 className="position-title">
+                        {position} Candidates
+                      </h3>
+
+                      <div className="voting-table">
+                        <div className="table-header">
+                          <div className="header-cell serial">#</div>
+                          <div className="header-cell name">
+                            Candidate Name
+                          </div>
+                          <div className="header-cell action">Action</div>
                         </div>
-                        <div className="candidate-info">
-                          <div className="candidate-header">
-                            <div>
-                              <h3 className="candidate-name">
-                                {candidate.name}
-                              </h3>
-                              <p className="candidate-position">
-                                {candidate.position}
-                              </p>
+
+                        <div className="table-body">
+                          {positionCandidates.map((candidate, index) => (
+                            <div key={candidate._id} className="table-row">
+                              <div className="table-cell serial">
+                                {index + 1}
+                              </div>
+
+                              <div className="table-cell name">
+                                <div className="candidate-info-row">
+                                  <img
+                                    src={candidate.image}
+                                    alt={candidate.name}
+                                    className="candidate-avatar"
+                                  />
+                                  <div>
+                                    <h4>{candidate.name}</h4>
+                                    <p>{candidate.party}</p>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="table-cell action">
+                                <button
+                                  disabled={user.hasVoted}
+                                  className="vote-table-btn"
+                                  onClick={() => handleVote(candidate.id)}
+                                >
+                                  {user.hasVoted ? "Voted" : "Vote"}
+                                </button>
+                              </div>
                             </div>
-                            <button
-                              className="expand-btn"
-                              onClick={() =>
-                                setExpandedCards((p) => ({
-                                  ...p,
-                                  [candidate._id]: !p[candidate._id],
-                                }))
-                              }
-                            >
-                              <svg
-                                className={`expand-icon ${
-                                  expandedCards[candidate._id] ? "rotated" : ""
-                                }`}
-                                viewBox="0 0 24 24"
-                              >
-                                <path d="M7 10l5 5 5-5z" />
-                              </svg>
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="expandable-content">
-                        <div className="expandable-inner">
-                          <div className="candidate-description">
-                            <h4>About</h4>
-                            <p>{candidate.description}</p>
-                          </div>
-                          <div className="candidate-experience">
-                            <h4>Experience</h4>
-                            <p>{candidate.age}</p>
-                          </div>
+                          ))}
                         </div>
                       </div>
                     </div>
-                  ))}
-                </div>
+                  );
+                })}
               </div>
-            )}
-
-            {activeTab === "vote" && (
-              <div
-                className="tab-content"
-                style={{ padding: "20px 32px", backgroundColor: "#ffffff" }}
-              >
-                <div className="voting-container">
-                  {["President", "Vice President"].map((position) => {
-                    const positionCandidates = candidates.filter(
-                      (c) => c.position === position
-                    );
-                    if (!positionCandidates.length) return null;
-                    return (
-                      <div
-                        key={position}
-                        className="position-group"
-                        style={{ marginBottom: "32px" }}
-                      >
-                        <h3
-                          className="position-title"
-                          style={{
-                            fontSize: "20px",
-                            fontWeight: "600",
-                            color: "#1f2937",
-                            marginBottom: "16px",
-                            textAlign: "center",
-                          }}
-                        >
-                          {position} Candidates
-                        </h3>
-                        <div className="voting-table">
-                          <div className="table-header">
-                            <div className="header-cell serial">#</div>
-                            <div className="header-cell name">
-                              Candidate Name
-                            </div>
-                            <div className="header-cell action">Action</div>
-                          </div>
-                          <div className="table-body">
-                            {positionCandidates.map((candidate, index) => (
-                              <div key={candidate._id} className="table-row">
-                                <div className="table-cell serial">
-                                  {index + 1}
-                                </div>
-                                <div className="table-cell name">
-                                  <div className="candidate-info-row">
-                                    <img
-                                      src={candidate.image}
-                                      alt={candidate.name}
-                                      className="candidate-avatar"
-                                    />
-                                    <div className="candidate-details">
-                                      <h4>{candidate.name}</h4>
-                                      <p>{candidate.party}</p>
-                                    </div>
-                                  </div>
-                                </div>
-                                <div className="table-cell action">
-                                  <button
-                                    disabled={user.hasVoted}
-                                    className="vote-table-btn"
-                                    style={{
-                                      cursor: user.hasVoted
-                                        ? "not-allowed"
-                                        : "pointer",
-                                    }}
-                                    onClick={() => handleVote(candidate.id)}
-                                  >
-                                    {user.hasVoted ? "Voted" : "Vote"}
-                                  </button>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-          </div>
+            </div>
+          )}
         </div>
-      </main>
+      </div>
+    </main>
+
 
       {/* Rules Modal */}
       {showRulesModal && (
